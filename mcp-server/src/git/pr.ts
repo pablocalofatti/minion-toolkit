@@ -45,7 +45,8 @@ export async function createPullRequest(
   );
 
   const url = stdout.trim();
-  const prNumber = parseInt(url.split("/").pop() ?? "0", 10);
+  const lastSegment = url.split("/").pop();
+  const prNumber = lastSegment ? parseInt(lastSegment, 10) : 0;
 
   return { url, number: prNumber };
 }

@@ -2,7 +2,7 @@ import Anthropic from "@anthropic-ai/sdk";
 import { readFile, writeFile, readdir, mkdir } from "node:fs/promises";
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
-import { join, resolve, relative, isAbsolute } from "node:path";
+import { resolve, relative, isAbsolute } from "node:path";
 
 const execFileAsync = promisify(execFile);
 
@@ -141,22 +141,22 @@ export async function executeWorkerTool(
 ): Promise<string> {
   switch (toolName) {
     case "read_file":
-      return readFileTool(worktreeRoot, input.path!);
+      return readFileTool(worktreeRoot, input.path ?? "");
     case "write_file":
-      return writeFileTool(worktreeRoot, input.path!, input.content!);
+      return writeFileTool(worktreeRoot, input.path ?? "", input.content ?? "");
     case "edit_file":
       return editFileTool(
         worktreeRoot,
-        input.path!,
-        input.old_string!,
-        input.new_string!
+        input.path ?? "",
+        input.old_string ?? "",
+        input.new_string ?? ""
       );
     case "run_command":
-      return runCommandTool(worktreeRoot, input.command!);
+      return runCommandTool(worktreeRoot, input.command ?? "");
     case "list_directory":
       return listDirectoryTool(worktreeRoot, input.path ?? ".");
     case "search_files":
-      return searchFilesTool(worktreeRoot, input.pattern!, input.glob);
+      return searchFilesTool(worktreeRoot, input.pattern ?? "", input.glob);
     default:
       return `Unknown tool: ${toolName}`;
   }
@@ -261,7 +261,7 @@ async function searchFilesTool(
       timeout: COMMAND_TIMEOUT_MS,
       maxBuffer: 1024 * 1024,
     });
-    return truncateOutput(stdout || "No matches found.");
+    return truncateOutput(stdout);
   } catch {
     return "No matches found.";
   }

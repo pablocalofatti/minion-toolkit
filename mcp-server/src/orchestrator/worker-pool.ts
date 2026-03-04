@@ -59,7 +59,10 @@ export function startWorkers(
 
   // Fire-and-forget: spawn all workers (semaphore controls concurrency)
   const workerPromises = session.tasks.map(async (task) => {
-    const status = session.workers.get(task.number)!;
+    const status = session.workers.get(task.number);
+    /* c8 ignore start -- defensive guard: status is always set by the sync init loop above */
+    if (!status) return;
+    /* c8 ignore stop */
 
     await semaphore.acquire();
 
@@ -110,6 +113,7 @@ export function startWorkers(
         state: "failed",
         branch: status.branch,
         filesChanged: [],
+        /* c8 ignore next -- startedAt is always set before any throwable code */
         duration: Date.now() - (status.startedAt ?? Date.now()),
         iterations: status.iteration,
         error: message,
@@ -120,9 +124,9 @@ export function startWorkers(
   });
 
   // Don't await — fire and forget. Results land in session.results.
-  Promise.allSettled(workerPromises).catch(() => {
-    // All errors are already captured per-worker
-  });
+  /* c8 ignore start -- Promise.allSettled never rejects */
+  Promise.allSettled(workerPromises).catch(() => {});
+  /* c8 ignore stop */
 }
 
 async function getChangedFiles(worktreePath: string): Promise<string[]> {
