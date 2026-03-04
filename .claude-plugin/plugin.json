@@ -1,0 +1,10 @@
+{
+  "name": "minion-toolkit",
+  "description": "Parallel task orchestrator that spawns worker agents in isolated git worktrees. Break tasks into pieces, build them in parallel, merge results.",
+  "version": "1.0.0",
+  "author": {
+    "name": "Pablo Calofatti"
+  },
+  "license": "MIT",
+  "keywords": ["orchestrator", "parallel", "worktree", "agents", "automation"]
+}
