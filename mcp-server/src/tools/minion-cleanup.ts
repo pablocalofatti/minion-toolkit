@@ -1,8 +1,12 @@
+import { execFile } from "node:child_process";
+import { promisify } from "node:util";
 import {
   getSession,
   deleteSession,
 } from "../orchestrator/session-store.js";
 import { removeWorktree, removeAllWorktrees } from "../git/worktree.js";
+
+const execFileAsync = promisify(execFile);
 
 interface CleanupInput {
   session_id: string;
@@ -37,16 +41,13 @@ export async function minionCleanup(input: CleanupInput): Promise<string> {
   // Clean up orphaned worktrees
   try {
     await removeAllWorktrees(session.projectRoot);
-  } catch {
-    // Best-effort
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : "Unknown error";
+    errors.push(`  Failed to prune orphaned worktrees: ${message}`);
   }
 
   // Remove branches if requested
   if (input.remove_branches) {
-    const { execFile } = await import("node:child_process");
-    const { promisify } = await import("node:util");
-    const execFileAsync = promisify(execFile);
-
     for (const worker of session.workers.values()) {
       try {
         await execFileAsync(
@@ -55,8 +56,11 @@ export async function minionCleanup(input: CleanupInput): Promise<string> {
           { cwd: session.projectRoot }
         );
         cleaned.push(`  Deleted branch: ${worker.branch}`);
-      } catch {
-        // Branch may not exist
+      } catch (err: unknown) {
+        const message = err instanceof Error ? err.message : "Unknown error";
+        if (!message.includes("not found")) {
+          errors.push(`  Failed to delete branch ${worker.branch}: ${message}`);
+        }
       }
     }
   }
