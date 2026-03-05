@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach } from "vitest";
-import { loadConfig } from "../../src/config.js";
+import { loadConfig, getWorkerTimeout } from "../../src/config.js";
 
 describe("loadConfig", () => {
   const originalEnv = { ...process.env };
@@ -145,5 +145,22 @@ describe("loadConfig", () => {
 
     process.env.MINION_MAX_WORKERS = "5";
     expect(loadConfig().maxWorkers).toBe(5);
+  });
+});
+
+describe("getWorkerTimeout", () => {
+  it("should return 1800000 for iterations over 100", () => {
+    expect(getWorkerTimeout(101)).toBe(1800000);
+    expect(getWorkerTimeout(200)).toBe(1800000);
+  });
+
+  it("should return 900000 for iterations over 50", () => {
+    expect(getWorkerTimeout(51)).toBe(900000);
+    expect(getWorkerTimeout(100)).toBe(900000);
+  });
+
+  it("should return 300000 for iterations 50 or below", () => {
+    expect(getWorkerTimeout(50)).toBe(300000);
+    expect(getWorkerTimeout(1)).toBe(300000);
   });
 });

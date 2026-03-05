@@ -51,3 +51,14 @@ function parseIntEnv(name: string, fallback: number): number {
   const parsed = parseInt(raw, 10);
   return isNaN(parsed) ? fallback : parsed;
 }
+
+export function getWorkerTimeout(iterations: number): number {
+  // Scale timeout based on iterations
+  if (iterations > 100) {
+    return 1800000;
+  }
+  if (iterations > 50) {
+    return 900000;
+  }
+  return 300000;
+}
