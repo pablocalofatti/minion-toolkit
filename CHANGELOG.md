@@ -1,5 +1,11 @@
 # Changelog
 
+## [1.2.1] - 2026-03-05
+
+### Fixed
+
+- use h3 headings in release notes and add github-actions[bot] to trusted authors (`66a7e60`)
+
 ## [1.2.0] - 2026-03-05
 
 ### Added
