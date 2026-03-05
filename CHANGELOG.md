@@ -1,5 +1,16 @@
 # Changelog
 
+## [1.2.3] - 2026-03-05
+
+### Fixed
+
+- revert release bookkeeping to PR approach with admin merge note (`e68c110`)
+
+### Other
+
+- v1.2.2 — update changelog and version (`455912b`)
+- add use cases, prerequisites, and contributing guidelines (`3ee9e8d`)
+
 ## [1.2.2] - 2026-03-05
 
 ### Fixed

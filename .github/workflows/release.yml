@@ -1,7 +1,11 @@
 # Release — auto-bump version and create GitHub Release on push to main.
 # Reads conventional commit messages since last tag to determine semver bump.
 # Creates a git tag + GitHub Release with auto-generated changelog.
-# Version is tracked via git tags; CHANGELOG.md is updated via a PR.
+# CHANGELOG.md and package.json are updated directly on main via RELEASE_TOKEN.
+#
+# Required secret: RELEASE_TOKEN — a fine-grained PAT with Contents: read/write.
+# GITHUB_TOKEN can't push to protected branches; the PAT authenticates as the
+# repo owner, which has admin bypass on the ruleset.
 
 name: Release
 
@@ -19,7 +23,6 @@ jobs:
     timeout-minutes: 5
     permissions:
       contents: write
-      pull-requests: write
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -145,14 +148,14 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Update CHANGELOG.md and package.json via PR
+      - name: Update CHANGELOG.md and package.json
         if: steps.bump.outputs.skip != 'true'
         run: |
           NEW_VERSION="${{ steps.bump.outputs.new_version }}"
           DATE=$(date +%Y-%m-%d)
-          BRANCH="chore/release-v${NEW_VERSION}"
 
-          git checkout -b "$BRANCH"
+          # Configure git with PAT for push auth
+          git remote set-url origin "https://x-access-token:${{ secrets.RELEASE_TOKEN }}@github.com/${{ github.repository }}.git"
 
           # Update package.json version
           cd mcp-server
@@ -180,12 +183,4 @@ jobs:
 
           git add mcp-server/package.json CHANGELOG.md
           git commit -m "chore(release): v${NEW_VERSION} — update changelog and version"
-          git push -u origin "$BRANCH"
-
-          gh pr create \
-            --title "chore(release): v${NEW_VERSION}" \
-            --body "Auto-generated release bookkeeping for v${NEW_VERSION}. Updates CHANGELOG.md and package.json version. Merge with admin bypass (CI won't run on GITHUB_TOKEN-created PRs)." \
-            --base main \
-            --head "$BRANCH"
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          git push origin main
