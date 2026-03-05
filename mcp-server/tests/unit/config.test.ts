@@ -1,5 +1,13 @@
 import { describe, it, expect, beforeEach, afterEach } from "vitest";
-import { loadConfig, getWorkerTimeout } from "../../src/config.js";
+import {
+  loadConfig,
+  getWorkerTimeout,
+  HIGH_ITERATION_THRESHOLD,
+  MID_ITERATION_THRESHOLD,
+  TIMEOUT_30_MIN_MS,
+  TIMEOUT_15_MIN_MS,
+  TIMEOUT_5_MIN_MS,
+} from "../../src/config.js";
 
 describe("loadConfig", () => {
   const originalEnv = { ...process.env };
@@ -149,18 +157,23 @@ describe("loadConfig", () => {
 });
 
 describe("getWorkerTimeout", () => {
-  it("should return 1800000 for iterations over 100", () => {
-    expect(getWorkerTimeout(101)).toBe(1800000);
-    expect(getWorkerTimeout(200)).toBe(1800000);
+  it("should throw for zero or negative iterations", () => {
+    expect(() => getWorkerTimeout(0)).toThrow("iterations must be positive, got 0");
+    expect(() => getWorkerTimeout(-1)).toThrow("iterations must be positive, got -1");
   });
 
-  it("should return 900000 for iterations over 50", () => {
-    expect(getWorkerTimeout(51)).toBe(900000);
-    expect(getWorkerTimeout(100)).toBe(900000);
+  it(`should return TIMEOUT_30_MIN_MS for iterations over ${HIGH_ITERATION_THRESHOLD}`, () => {
+    expect(getWorkerTimeout(HIGH_ITERATION_THRESHOLD + 1)).toBe(TIMEOUT_30_MIN_MS);
+    expect(getWorkerTimeout(200)).toBe(TIMEOUT_30_MIN_MS);
   });
 
-  it("should return 300000 for iterations 50 or below", () => {
-    expect(getWorkerTimeout(50)).toBe(300000);
-    expect(getWorkerTimeout(1)).toBe(300000);
+  it(`should return TIMEOUT_15_MIN_MS for iterations over ${MID_ITERATION_THRESHOLD}`, () => {
+    expect(getWorkerTimeout(MID_ITERATION_THRESHOLD + 1)).toBe(TIMEOUT_15_MIN_MS);
+    expect(getWorkerTimeout(HIGH_ITERATION_THRESHOLD)).toBe(TIMEOUT_15_MIN_MS);
+  });
+
+  it(`should return TIMEOUT_5_MIN_MS for iterations at or below ${MID_ITERATION_THRESHOLD}`, () => {
+    expect(getWorkerTimeout(MID_ITERATION_THRESHOLD)).toBe(TIMEOUT_5_MIN_MS);
+    expect(getWorkerTimeout(1)).toBe(TIMEOUT_5_MIN_MS);
   });
 });

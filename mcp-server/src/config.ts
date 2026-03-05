@@ -52,13 +52,21 @@ function parseIntEnv(name: string, fallback: number): number {
   return isNaN(parsed) ? fallback : parsed;
 }
 
+export const HIGH_ITERATION_THRESHOLD = 100;
+export const MID_ITERATION_THRESHOLD = 50;
+export const TIMEOUT_30_MIN_MS = 1_800_000;
+export const TIMEOUT_15_MIN_MS = 900_000;
+export const TIMEOUT_5_MIN_MS = 300_000;
+
 export function getWorkerTimeout(iterations: number): number {
-  // Scale timeout based on iterations
-  if (iterations > 100) {
-    return 1800000;
+  if (iterations <= 0) {
+    throw new Error(`iterations must be positive, got ${iterations}`);
   }
-  if (iterations > 50) {
-    return 900000;
+  if (iterations > HIGH_ITERATION_THRESHOLD) {
+    return TIMEOUT_30_MIN_MS;
   }
-  return 300000;
+  if (iterations > MID_ITERATION_THRESHOLD) {
+    return TIMEOUT_15_MIN_MS;
+  }
+  return TIMEOUT_5_MIN_MS;
 }
