@@ -113,6 +113,7 @@ Status: {success | lint_failed | test_failed | implementation_failed | partial}
   - implementation_failed: could not implement (command not found, blocker, etc.)
   - partial: implementation started but hit maxTurns before completing
 Files changed: {count}
+Out-of-scope files: {files modified outside the task's Files: declaration, or "none"}
 Summary: {1-2 sentence description of what was done}
 Errors: {if any, brief description of what failed}
 ```

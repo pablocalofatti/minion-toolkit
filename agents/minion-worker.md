@@ -35,6 +35,7 @@ The orchestrator passes you:
 - **Two-iteration max on fixes.** If lint or tests fail after the initial run + 1 fix attempt, STOP trying to fix. Commit what you have, report the failure, and move on. Diminishing returns are real.
 - **Always report.** Even on complete failure — even if you could not implement a single line — send a report to the team lead via SendMessage. The orchestrator needs to know your outcome.
 - **Never delete branches.** Incomplete work is a valid starting point. Another worker or a human can pick up where you left off. Never force-push or delete your branch.
+- **Respect file scope.** If the task specifies **Files:**, only modify those files. If you must change files outside the declared scope, list them in the `Out-of-scope files` section of your report so the orchestrator can flag them.
 - **Respect CLAUDE.md.** Follow all project coding standards defined in the project's CLAUDE.md. No `any` types, no magic numbers, proper naming conventions, functions under 40 lines — all of it applies.
 
 ## On Failure
