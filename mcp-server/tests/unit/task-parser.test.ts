@@ -171,4 +171,156 @@ More description after files.`;
       "First line.\nMore description after files."
     );
   });
+
+  // Backward compatibility — no Depends line returns empty dependsOn array
+  it("should return empty dependsOn when no Depends line is present", () => {
+    const md = `### Task 1: No deps
+Just a plain task.`;
+
+    const tasks = parseTasks(md);
+    expect(tasks[0].dependsOn).toEqual([]);
+  });
+
+  it("should return skip: false when no DONE or SKIP marker is present", () => {
+    const md = `### Task 1: Normal task
+Description.`;
+
+    const tasks = parseTasks(md);
+    expect(tasks[0].skip).toBe(false);
+  });
+
+  // Depends: parsing
+  it("should parse a single dependency from a Depends: line", () => {
+    const md = `### Task 2: Dependent task
+Description.
+Depends: Task 1`;
+
+    const tasks = parseTasks(md);
+    expect(tasks[0].dependsOn).toEqual([1]);
+  });
+
+  it("should parse multiple dependencies from a Depends: line", () => {
+    const md = `### Task 3: Multi-dep task
+Description.
+Depends: Task 1, Task 2`;
+
+    const tasks = parseTasks(md);
+    expect(tasks[0].dependsOn).toEqual([1, 2]);
+  });
+
+  it("should parse dependencies using bold **Depends:** format", () => {
+    const md = `### Task 3: Bold depends
+Description.
+**Depends:** Task 1, Task 2`;
+
+    const tasks = parseTasks(md);
+    expect(tasks[0].dependsOn).toEqual([1, 2]);
+  });
+
+  it("should handle extra whitespace in Depends: line", () => {
+    const md = `### Task 3: Whitespace test
+Description.
+Depends:   Task 1 ,   Task 2  `;
+
+    const tasks = parseTasks(md);
+    expect(tasks[0].dependsOn).toEqual([1, 2]);
+  });
+
+  it("should not include Depends: line in description", () => {
+    const md = `### Task 2: With dep
+Main description.
+Depends: Task 1`;
+
+    const tasks = parseTasks(md);
+    expect(tasks[0].description).toBe("Main description.");
+    expect(tasks[0].dependsOn).toEqual([1]);
+  });
+
+  // [DONE] marker
+  it("should set skip: true when [DONE] marker appears in heading", () => {
+    const md = `### Task 1: [DONE] Set up project
+Already done.`;
+
+    const tasks = parseTasks(md);
+    expect(tasks[0].skip).toBe(true);
+    expect(tasks[0].title).toBe("Set up project");
+  });
+
+  it("should set skip: true when [DONE] marker appears at the end of heading", () => {
+    const md = `### Task 1: Set up project [DONE]
+Already done.`;
+
+    const tasks = parseTasks(md);
+    expect(tasks[0].skip).toBe(true);
+    expect(tasks[0].title).toBe("Set up project");
+  });
+
+  // [SKIP] marker
+  it("should set skip: true when [SKIP] marker appears in heading", () => {
+    const md = `### Task 2: [SKIP] Optional feature
+Not needed anymore.`;
+
+    const tasks = parseTasks(md);
+    expect(tasks[0].skip).toBe(true);
+    expect(tasks[0].title).toBe("Optional feature");
+  });
+
+  it("should set skip: true when [SKIP] marker appears at the end of heading", () => {
+    const md = `### Task 2: Optional feature [SKIP]
+Not needed anymore.`;
+
+    const tasks = parseTasks(md);
+    expect(tasks[0].skip).toBe(true);
+    expect(tasks[0].title).toBe("Optional feature");
+  });
+
+  it("should strip [DONE]/[SKIP] markers from the title", () => {
+    const md = `### Task 1: [DONE] Build the thing [SKIP]
+Desc.`;
+
+    const tasks = parseTasks(md);
+    expect(tasks[0].title).toBe("Build the thing");
+    expect(tasks[0].skip).toBe(true);
+  });
+
+  // Case insensitivity
+  it("should detect [done] and [skip] markers case-insensitively", () => {
+    const md = `### Task 1: [done] Some task
+Desc.`;
+
+    const tasks = parseTasks(md);
+    expect(tasks[0].skip).toBe(true);
+    expect(tasks[0].title).toBe("Some task");
+  });
+
+  // Combined: task with Depends and skip marker
+  it("should parse both Depends and DONE marker on the same task", () => {
+    const md = `### Task 3: [DONE] Final step
+All done here.
+Depends: Task 1, Task 2`;
+
+    const tasks = parseTasks(md);
+    expect(tasks[0].skip).toBe(true);
+    expect(tasks[0].title).toBe("Final step");
+    expect(tasks[0].dependsOn).toEqual([1, 2]);
+    expect(tasks[0].description).toBe("All done here.");
+  });
+
+  // Mixed tasks: some with deps, some without
+  it("should correctly assign dependsOn to only the tasks that have a Depends: line", () => {
+    const md = `### Task 1: Foundation
+No deps here.
+
+### Task 2: Build on top
+Needs the foundation.
+Depends: Task 1
+
+### Task 3: Independent
+Stands alone.`;
+
+    const tasks = parseTasks(md);
+    expect(tasks[0].dependsOn).toEqual([]);
+    expect(tasks[1].dependsOn).toEqual([1]);
+    expect(tasks[2].dependsOn).toEqual([]);
+  });
 });

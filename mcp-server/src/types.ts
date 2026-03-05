@@ -12,6 +12,8 @@ export interface ParsedTask {
   title: string;
   description: string;
   files: string[];
+  dependsOn: number[];
+  skip: boolean;
 }
 
 export interface ProjectCommands {
