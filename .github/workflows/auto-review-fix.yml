@@ -1,0 +1,147 @@
+# Auto Fix Review — when code review posts inline comments, Claude addresses each one,
+# replies to the comment thread, and pushes the fix. Loop limit: 2 fix cycles.
+
+name: Auto Fix Review
+
+on:
+  workflow_run:
+    workflows: ["Claude Code Review"]
+    types: [completed]
+
+jobs:
+  fix-review:
+    if: |
+      github.event.workflow_run.event == 'pull_request' &&
+      github.event.workflow_run.pull_requests[0] != null &&
+      github.event.workflow_run.head_branch != 'main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    concurrency:
+      group: auto-fix-${{ github.event.workflow_run.head_branch }}
+      cancel-in-progress: true
+    permissions:
+      contents: write
+      pull-requests: write
+      actions: read
+      issues: write
+      id-token: write
+
+    steps:
+      - name: Checkout PR branch
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.workflow_run.head_branch }}
+          fetch-depth: 20
+
+      - name: Check for review fix loop
+        id: loop_check
+        run: |
+          FIX_COUNT=$(git log --oneline -10 | grep -c 'fix(review):' || true)
+          if [ "$FIX_COUNT" -ge 2 ]; then
+            echo "skip=true" >> $GITHUB_OUTPUT
+            echo "::notice::Skipping — already made $FIX_COUNT review fix attempts."
+          else
+            echo "skip=false" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Get unreplied review comments
+        if: steps.loop_check.outputs.skip == 'false'
+        id: review_comments
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const prNumber = ${{ github.event.workflow_run.pull_requests[0].number }};
+
+            const { data: comments } = await github.rest.pulls.listReviewComments({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              pull_number: prNumber,
+              per_page: 100
+            });
+
+            // Find which comments already have replies
+            const repliedToIds = new Set(
+              comments.filter(c => c.in_reply_to_id).map(c => c.in_reply_to_id)
+            );
+
+            // Original comments (not replies themselves) that have no replies
+            const unreplied = comments.filter(
+              c => !c.in_reply_to_id && !repliedToIds.has(c.id)
+            );
+
+            if (unreplied.length === 0) {
+              core.setOutput('has_comments', 'false');
+              core.notice('No unreplied review comments found — skipping.');
+              return [];
+            }
+
+            core.setOutput('has_comments', 'true');
+            return {
+              prNumber,
+              comments: unreplied.map(c => ({
+                id: c.id,
+                path: c.path,
+                line: c.line || c.original_line,
+                body: c.body.slice(0, 500)
+              }))
+            };
+
+      - name: Setup pnpm
+        if: steps.loop_check.outputs.skip == 'false' && steps.review_comments.outputs.has_comments == 'true'
+        uses: pnpm/action-setup@v4
+        with:
+          version: latest
+
+      - name: Setup Node.js
+        if: steps.loop_check.outputs.skip == 'false' && steps.review_comments.outputs.has_comments == 'true'
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+          cache-dependency-path: mcp-server/pnpm-lock.yaml
+
+      - name: Install dependencies
+        if: steps.loop_check.outputs.skip == 'false' && steps.review_comments.outputs.has_comments == 'true'
+        run: pnpm install --frozen-lockfile
+        working-directory: mcp-server
+
+      - name: Fix review comments with Claude
+        if: steps.loop_check.outputs.skip == 'false' && steps.review_comments.outputs.has_comments == 'true'
+        uses: anthropics/claude-code-action@v1
+        with:
+          claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          claude_args: |
+            --max-turns 25 --allowedTools "Edit,MultiEdit,Write,Read,Glob,Grep,LS,Bash(pnpm:*),Bash(git:*),Bash(cd:*),Bash(gh:*)"
+          prompt: |
+            You are an expert TypeScript engineer addressing code review feedback on a pull request.
+
+            ## Context
+            - Working directory: mcp-server/
+            - PR #${{ fromJSON(steps.review_comments.outputs.result).prNumber }} on branch "${{ github.event.workflow_run.head_branch }}"
+            - Read CLAUDE.md at the repo root for engineering standards.
+
+            ## Review Comments to Address
+            ${{ toJSON(fromJSON(steps.review_comments.outputs.result).comments) }}
+
+            ## Instructions
+            For EACH comment above:
+            1. Read the file at the specified path and line.
+            2. Understand the reviewer's concern.
+            3. Fix the code to address the feedback. Do NOT suppress issues with @ts-ignore or eslint-disable.
+            4. Reply to the comment explaining your fix:
+               gh api "repos/$GITHUB_REPOSITORY/pulls/${{ fromJSON(steps.review_comments.outputs.result).prNumber }}/comments/<COMMENT_ID>/replies" -f body="Fixed: <brief explanation>"
+
+            After addressing ALL comments:
+            5. Run: cd mcp-server && pnpm run check
+            6. If checks pass, commit: git add -A && git commit -m "fix(review): address code review feedback"
+            7. If checks fail, fix the remaining errors (up to 2 attempts).
+            8. Only commit if all checks pass. Do NOT commit broken code.
+            9. Push: git push
+            10. Then STOP.
+
+            ## Rules
+            - Follow CLAUDE.md engineering standards strictly.
+            - Maintain 100% test coverage.
+            - Reply to EVERY comment — no comment should go unanswered.
+            - Do NOT modify vitest.config.ts, eslint.config.js, or tsconfig.json.
+            - Do NOT install new dependencies.
