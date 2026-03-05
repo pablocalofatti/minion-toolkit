@@ -1,0 +1,177 @@
+# Release — auto-bump version and update changelog on push to main.
+# Reads conventional commit messages since last tag to determine semver bump.
+# Creates a version commit + git tag, then pushes.
+
+name: Release
+
+on:
+  push:
+    branches: [main]
+    paths-ignore:
+      - 'CHANGELOG.md'
+      - 'mcp-server/package.json'
+
+jobs:
+  release:
+    # Skip if the push is from the release bot itself (prevent loop)
+    if: "!startsWith(github.event.head_commit.message, 'chore(release):')"
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Determine version bump
+        id: bump
+        run: |
+          # Get the latest tag, or use initial commit if no tags exist
+          LATEST_TAG=$(git describe --tags --abbrev=0 2>/dev/null || echo "")
+
+          if [ -z "$LATEST_TAG" ]; then
+            COMMIT_RANGE="HEAD"
+            CURRENT_VERSION=$(node -p "require('./mcp-server/package.json').version")
+          else
+            COMMIT_RANGE="${LATEST_TAG}..HEAD"
+            CURRENT_VERSION="${LATEST_TAG#v}"
+          fi
+
+          echo "current_version=$CURRENT_VERSION" >> $GITHUB_OUTPUT
+          echo "commit_range=$COMMIT_RANGE" >> $GITHUB_OUTPUT
+
+          # Parse conventional commits to determine bump type
+          COMMITS=$(git log $COMMIT_RANGE --pretty=format:"%s" 2>/dev/null || git log --pretty=format:"%s")
+
+          HAS_BREAKING=$(echo "$COMMITS" | grep -c '!:' || true)
+          HAS_FEAT=$(echo "$COMMITS" | grep -c '^feat' || true)
+          HAS_FIX=$(echo "$COMMITS" | grep -c '^fix' || true)
+
+          if [ "$HAS_BREAKING" -gt 0 ]; then
+            BUMP="major"
+          elif [ "$HAS_FEAT" -gt 0 ]; then
+            BUMP="minor"
+          elif [ "$HAS_FIX" -gt 0 ]; then
+            BUMP="patch"
+          else
+            echo "skip=true" >> $GITHUB_OUTPUT
+            echo "::notice::No version-bumping commits found — skipping release."
+            exit 0
+          fi
+
+          echo "bump=$BUMP" >> $GITHUB_OUTPUT
+          echo "skip=false" >> $GITHUB_OUTPUT
+
+          # Calculate new version
+          IFS='.' read -r MAJOR MINOR PATCH <<< "$CURRENT_VERSION"
+          case "$BUMP" in
+            major) MAJOR=$((MAJOR + 1)); MINOR=0; PATCH=0 ;;
+            minor) MINOR=$((MINOR + 1)); PATCH=0 ;;
+            patch) PATCH=$((PATCH + 1)) ;;
+          esac
+          NEW_VERSION="${MAJOR}.${MINOR}.${PATCH}"
+
+          echo "new_version=$NEW_VERSION" >> $GITHUB_OUTPUT
+          echo "::notice::Bumping $CURRENT_VERSION → $NEW_VERSION ($BUMP)"
+
+      - name: Generate changelog entry
+        if: steps.bump.outputs.skip != 'true'
+        id: changelog
+        run: |
+          NEW_VERSION="${{ steps.bump.outputs.new_version }}"
+          COMMIT_RANGE="${{ steps.bump.outputs.commit_range }}"
+          DATE=$(date +%Y-%m-%d)
+
+          # Build changelog entry from conventional commits
+          ENTRY="## [${NEW_VERSION}] - ${DATE}"$'\n'
+
+          # Group commits by type
+          if [ "$COMMIT_RANGE" = "HEAD" ]; then
+            COMMITS=$(git log --pretty=format:"%s|||%h" --reverse)
+          else
+            COMMITS=$(git log ${COMMIT_RANGE} --pretty=format:"%s|||%h" --reverse)
+          fi
+
+          FEATURES=""
+          FIXES=""
+          OTHER=""
+
+          while IFS='|||' read -r MSG HASH; do
+            [ -z "$MSG" ] && continue
+            if [[ "$MSG" == feat:* ]] || [[ "$MSG" == feat\(*\):* ]]; then
+              # Strip prefix
+              CLEAN=$(echo "$MSG" | sed 's/^feat[^:]*: //')
+              FEATURES="${FEATURES}"$'\n'"- ${CLEAN} (\`${HASH}\`)"
+            elif [[ "$MSG" == fix:* ]] || [[ "$MSG" == fix\(*\):* ]]; then
+              CLEAN=$(echo "$MSG" | sed 's/^fix[^:]*: //')
+              FIXES="${FIXES}"$'\n'"- ${CLEAN} (\`${HASH}\`)"
+            elif [[ "$MSG" == chore:* ]] || [[ "$MSG" == chore\(*\):* ]] || [[ "$MSG" == refactor:* ]] || [[ "$MSG" == test:* ]] || [[ "$MSG" == docs:* ]]; then
+              CLEAN=$(echo "$MSG" | sed 's/^[a-z]*[^:]*: //')
+              OTHER="${OTHER}"$'\n'"- ${CLEAN} (\`${HASH}\`)"
+            fi
+          done <<< "$COMMITS"
+
+          if [ -n "$FEATURES" ]; then
+            ENTRY="${ENTRY}"$'\n'"### Added"$'\n'"${FEATURES}"$'\n'
+          fi
+          if [ -n "$FIXES" ]; then
+            ENTRY="${ENTRY}"$'\n'"### Fixed"$'\n'"${FIXES}"$'\n'
+          fi
+          if [ -n "$OTHER" ]; then
+            ENTRY="${ENTRY}"$'\n'"### Other"$'\n'"${OTHER}"$'\n'
+          fi
+
+          # Save entry to file for next step
+          echo "$ENTRY" > /tmp/changelog-entry.md
+          cat /tmp/changelog-entry.md
+
+      - name: Update package.json version
+        if: steps.bump.outputs.skip != 'true'
+        run: |
+          NEW_VERSION="${{ steps.bump.outputs.new_version }}"
+          cd mcp-server
+          node -e "
+            const fs = require('fs');
+            const pkg = JSON.parse(fs.readFileSync('package.json', 'utf8'));
+            pkg.version = '${NEW_VERSION}';
+            fs.writeFileSync('package.json', JSON.stringify(pkg, null, 2) + '\n');
+          "
+          echo "Updated mcp-server/package.json to ${NEW_VERSION}"
+
+      - name: Update CHANGELOG.md
+        if: steps.bump.outputs.skip != 'true'
+        run: |
+          ENTRY=$(cat /tmp/changelog-entry.md)
+
+          if [ -f CHANGELOG.md ]; then
+            # Insert new entry after the header line
+            awk -v entry="$ENTRY" '
+              /^# Changelog/ { print; print ""; print entry; next }
+              { print }
+            ' CHANGELOG.md > /tmp/changelog-new.md
+            mv /tmp/changelog-new.md CHANGELOG.md
+          else
+            echo "# Changelog" > CHANGELOG.md
+            echo "" >> CHANGELOG.md
+            echo "$ENTRY" >> CHANGELOG.md
+          fi
+
+      - name: Commit and tag
+        if: steps.bump.outputs.skip != 'true'
+        run: |
+          NEW_VERSION="${{ steps.bump.outputs.new_version }}"
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add mcp-server/package.json CHANGELOG.md
+          git commit -m "chore(release): v${NEW_VERSION}"
+          git tag "v${NEW_VERSION}"
+          git push
+          git push --tags
