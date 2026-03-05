@@ -155,6 +155,15 @@ describe("validateWorkerCount", () => {
     expect(validateWorkerCount(undefined)).toBe(3);
   });
 
+  it("should return 3 for NaN", () => {
+    expect(validateWorkerCount(NaN)).toBe(3);
+  });
+
+  it("should return 3 for non-finite numbers", () => {
+    expect(validateWorkerCount(Infinity)).toBe(3);
+    expect(validateWorkerCount(-Infinity)).toBe(3);
+  });
+
   it("should clamp to 1 for values below 1", () => {
     expect(validateWorkerCount(0)).toBe(1);
     expect(validateWorkerCount(-10)).toBe(1);
@@ -169,5 +178,16 @@ describe("validateWorkerCount", () => {
     expect(validateWorkerCount(3)).toBe(3);
     expect(validateWorkerCount(1)).toBe(1);
     expect(validateWorkerCount(5)).toBe(5);
+  });
+
+  it("should floor float values", () => {
+    expect(validateWorkerCount(2.7)).toBe(2);
+    expect(validateWorkerCount(1.9)).toBe(1);
+    expect(validateWorkerCount(4.1)).toBe(4);
+  });
+
+  it("should clamp floored float values to range", () => {
+    expect(validateWorkerCount(0.9)).toBe(1);
+    expect(validateWorkerCount(5.8)).toBe(5);
   });
 });

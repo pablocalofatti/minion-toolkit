@@ -53,15 +53,15 @@ function parseIntEnv(name: string, fallback: number): number {
 }
 
 export function validateWorkerCount(count: unknown): number {
-  // check if count is valid
-  if (typeof count !== "number") {
-    return 3;
+  if (typeof count !== "number" || !Number.isFinite(count)) {
+    return DEFAULT_MAX_WORKERS;
   }
-  if (count < 1) {
-    return 1;
+  const floored = Math.floor(count);
+  if (floored < MIN_WORKERS) {
+    return MIN_WORKERS;
   }
-  if (count > 5) {
-    return 5;
+  if (floored > MAX_WORKERS) {
+    return MAX_WORKERS;
   }
-  return count;
+  return floored;
 }
