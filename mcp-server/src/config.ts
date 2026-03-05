@@ -51,3 +51,17 @@ function parseIntEnv(name: string, fallback: number): number {
   const parsed = parseInt(raw, 10);
   return isNaN(parsed) ? fallback : parsed;
 }
+
+export function validateWorkerCount(count: unknown): number {
+  // check if count is valid
+  if (typeof count !== "number") {
+    return 3;
+  }
+  if (count < 1) {
+    return 1;
+  }
+  if (count > 5) {
+    return 5;
+  }
+  return count;
+}

@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach } from "vitest";
-import { loadConfig } from "../../src/config.js";
+import { loadConfig, validateWorkerCount } from "../../src/config.js";
 
 describe("loadConfig", () => {
   const originalEnv = { ...process.env };
@@ -145,5 +145,29 @@ describe("loadConfig", () => {
 
     process.env.MINION_MAX_WORKERS = "5";
     expect(loadConfig().maxWorkers).toBe(5);
+  });
+});
+
+describe("validateWorkerCount", () => {
+  it("should return 3 for non-number input", () => {
+    expect(validateWorkerCount("hello")).toBe(3);
+    expect(validateWorkerCount(null)).toBe(3);
+    expect(validateWorkerCount(undefined)).toBe(3);
+  });
+
+  it("should clamp to 1 for values below 1", () => {
+    expect(validateWorkerCount(0)).toBe(1);
+    expect(validateWorkerCount(-10)).toBe(1);
+  });
+
+  it("should clamp to 5 for values above 5", () => {
+    expect(validateWorkerCount(10)).toBe(5);
+    expect(validateWorkerCount(100)).toBe(5);
+  });
+
+  it("should return the value when within range", () => {
+    expect(validateWorkerCount(3)).toBe(3);
+    expect(validateWorkerCount(1)).toBe(1);
+    expect(validateWorkerCount(5)).toBe(5);
   });
 });
