@@ -1,5 +1,16 @@
 # Changelog
 
+## [1.2.2] - 2026-03-05
+
+### Fixed
+
+- push release bookkeeping directly to main instead of creating PR (`ca5ea57`)
+
+### Other
+
+- v1.2.0 (#8) (`0c61aa9`)
+- v1.2.1 — update changelog and version (`a3f1adf`)
+
 ## [1.2.1] - 2026-03-05
 
 ### Fixed
