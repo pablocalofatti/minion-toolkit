@@ -57,9 +57,9 @@ A GitHub fine-grained Personal Access Token (PAT) that allows the release workfl
 4. Under **Permissions > Repository permissions**, set **Contents** to `Read and write`
 5. Generate and copy the token
 
-**Used by:** `release.yml` — to push version tags and update `CHANGELOG.md` on `main`.
+**Used by:** `release.yml` — to push version tags, create GitHub Releases, and open version-bump PRs.
 
-> **Why not use `GITHUB_TOKEN`?** The default `GITHUB_TOKEN` cannot push to protected branches. A fine-grained PAT authenticated as the repo owner has admin-level bypass on ruleset restrictions.
+> **Why not use `GITHUB_TOKEN`?** The default `GITHUB_TOKEN` cannot push tags to protected repos or create PRs with auto-merge. A fine-grained PAT authenticated as the repo owner provides the necessary permissions.
 
 ---
 
@@ -74,11 +74,30 @@ Enable both of the following options:
 
 ---
 
-## 4. Branch Protection Rules
+## 4. Branch Rulesets
 
-Navigate to **Settings > Branches > Add rule** and create a rule for the `main` branch.
+Navigate to **Settings > Rules > Rulesets** and create a new branch ruleset for the `main` branch.
 
-### Required Status Checks
+### Ruleset Configuration
+
+- **Name:** `main-protection`
+- **Enforcement:** Active
+- **Target:** Branch `refs/heads/main`
+
+### Bypass Actors
+
+Add a bypass for the **Admin** repository role with mode **Pull requests only**. This allows admins to merge PRs that don't meet all requirements (useful for emergencies) but **blocks direct pushes to main** from everyone — including admins.
+
+> **Why "Pull requests only"?** This ensures all changes to `main` flow through pull requests. The release workflow creates a PR for version bumps instead of pushing directly, so it works without admin bypass.
+
+### Rules
+
+**Pull Request:**
+- Required approving review count: **1**
+- Dismiss stale reviews on push: **enabled**
+- The `code-review.yml` workflow automatically approves clean PRs using Claude, satisfying this requirement without manual intervention.
+
+**Required Status Checks:**
 
 Add the following checks (the names must match the workflow job IDs **exactly**):
 
@@ -88,16 +107,6 @@ Add the following checks (the names must match the workflow job IDs **exactly**)
 | `pr-gate`  | `pr-gate.yml` (job: `pr-gate`) |
 
 > **Important:** Check names are case-sensitive and must match the `jobs:` key in the workflow file, not the workflow `name:` field. Use `ci` (not `CI`) and `pr-gate` (not `PR Gate`).
-
-### Pull Request Reviews
-
-- **Require pull request reviews before merging:** Enable, set to at least **1 approval**.
-- The `code-review.yml` workflow automatically approves clean PRs using Claude, satisfying this requirement without manual intervention.
-
-### Administrators
-
-- **Include administrators:** Recommended **OFF**.
-- Keeping administrators excluded allows `RELEASE_TOKEN` (which authenticates as the repo owner) to push directly to `main` for release commits and tag creation.
 
 ---
 
@@ -129,7 +138,7 @@ Runs on every PR open/update and every review submission. Automatically passes P
 
 ### `release.yml` — Automated Release
 
-Triggers on every push to `main` (excluding release commits themselves). Reads all conventional commits since the last git tag to determine the semver bump: `feat:` → minor, `fix:` → patch, breaking changes (`!:`) → major. Creates a git tag, a GitHub Release with a grouped changelog, and commits updated `mcp-server/package.json` and `CHANGELOG.md` back to `main` using the `RELEASE_TOKEN`. Skips if no version-bumping commits are found.
+Triggers on every push to `main` (excluding release commits themselves). Reads all conventional commits since the last git tag to determine the semver bump: `feat:` → minor, `fix:` → patch, breaking changes (`!:`) → major. Creates a git tag and a GitHub Release with a grouped changelog. Then opens a PR to update `mcp-server/package.json` version and `CHANGELOG.md`, with auto-merge enabled. The version-bump PR uses the `chore(release):` prefix so it doesn't re-trigger the release workflow when merged. Skips if no version-bumping commits are found.
 
 ---
 
@@ -145,7 +154,7 @@ Here is the end-to-end sequence from task file to GitHub Release:
 6. **Claude Code Review** — `code-review.yml` reviews the PR diff against `CLAUDE.md` standards. Approves if clean; posts inline blocking comments if not.
 7. **Auto Fix Review** — If review comments exist, `auto-review-fix.yml` addresses each one and pushes `fix(review): address code review feedback`.
 8. **Auto-merge** — Once all required checks (`ci`, `pr-gate`) pass and the PR is approved (by Claude or manually), GitHub auto-merges the PR via squash.
-9. **Release** — On merge to `main`, `release.yml` determines the semver bump, creates a git tag, generates a GitHub Release, and updates `CHANGELOG.md` and `package.json`.
+9. **Release** — On merge to `main`, `release.yml` determines the semver bump, creates a git tag and GitHub Release, then opens a version-bump PR for `CHANGELOG.md` and `package.json` that auto-merges.
 
 ---
 
@@ -158,10 +167,10 @@ Use this checklist to confirm the pipeline is fully configured before running `/
 - [ ] `RELEASE_TOKEN` secret configured (fine-grained PAT, Contents: read/write)
 - [ ] "Allow auto-merge" enabled in Settings > General > Pull Requests
 - [ ] "Automatically delete head branches" enabled in Settings > General > Pull Requests
-- [ ] Branch protection on `main` requires `ci` status check (exact job name)
-- [ ] Branch protection on `main` requires `pr-gate` status check (exact job name)
-- [ ] Branch protection on `main` requires at least 1 PR approval
-- [ ] "Include administrators" is **disabled** in the branch protection rule
+- [ ] Ruleset `main-protection` on `main` requires `ci` status check (exact job name)
+- [ ] Ruleset `main-protection` on `main` requires `pr-gate` status check (exact job name)
+- [ ] Ruleset `main-protection` on `main` requires at least 1 PR approval
+- [ ] Admin bypass mode set to **"Pull requests only"** (not "Always")
 - [ ] All 6 workflow files present in `.github/workflows/`
 - [ ] Test: create a branch, push a commit, open a PR — verify CI and Claude Code Review both trigger
 
