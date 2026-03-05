@@ -1,9 +1,9 @@
 import { MinionConfig } from "./types.js";
 
 const DEFAULT_MODEL = "claude-sonnet-4-6-20250514";
-const DEFAULT_MAX_WORKERS = 3;
-const MIN_WORKERS = 1;
-const MAX_WORKERS = 5;
+export const DEFAULT_MAX_WORKERS = 3;
+export const MIN_WORKERS = 1;
+export const MAX_WORKERS = 5;
 const DEFAULT_WORKER_MAX_TOKENS = 16384;
 const DEFAULT_WORKER_MAX_ITERATIONS = 40;
 const DEFAULT_WORKER_TIMEOUT_MS = 900_000; // 15 minutes
@@ -21,10 +21,7 @@ export function loadConfig(): MinionConfig {
     process.env.MINION_MAX_WORKERS ?? String(DEFAULT_MAX_WORKERS),
     10
   );
-  const maxWorkers = Math.min(
-    MAX_WORKERS,
-    Math.max(MIN_WORKERS, isNaN(rawMaxWorkers) ? DEFAULT_MAX_WORKERS : rawMaxWorkers)
-  );
+  const maxWorkers = validateWorkerCount(rawMaxWorkers);
 
   return {
     anthropicApiKey: apiKey,

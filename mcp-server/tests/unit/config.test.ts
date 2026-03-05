@@ -1,5 +1,11 @@
 import { describe, it, expect, beforeEach, afterEach } from "vitest";
-import { loadConfig, validateWorkerCount } from "../../src/config.js";
+import {
+  loadConfig,
+  validateWorkerCount,
+  DEFAULT_MAX_WORKERS,
+  MIN_WORKERS,
+  MAX_WORKERS,
+} from "../../src/config.js";
 
 describe("loadConfig", () => {
   const originalEnv = { ...process.env };
@@ -32,7 +38,7 @@ describe("loadConfig", () => {
     expect(config).toEqual({
       anthropicApiKey: "test-api-key-123",
       model: "claude-sonnet-4-6-20250514",
-      maxWorkers: 3,
+      maxWorkers: DEFAULT_MAX_WORKERS,
       workerMaxTokens: 16384,
       workerMaxIterations: 40,
       workerTimeoutMs: 900_000,
@@ -51,28 +57,28 @@ describe("loadConfig", () => {
     expect(config.maxWorkers).toBe(4);
   });
 
-  it("should clamp MINION_MAX_WORKERS to minimum of 1", () => {
+  it("should clamp MINION_MAX_WORKERS to minimum of MIN_WORKERS", () => {
     process.env.MINION_MAX_WORKERS = "0";
     const config = loadConfig();
-    expect(config.maxWorkers).toBe(1);
+    expect(config.maxWorkers).toBe(MIN_WORKERS);
   });
 
-  it("should clamp MINION_MAX_WORKERS to minimum of 1 for negative values", () => {
+  it("should clamp MINION_MAX_WORKERS to minimum of MIN_WORKERS for negative values", () => {
     process.env.MINION_MAX_WORKERS = "-5";
     const config = loadConfig();
-    expect(config.maxWorkers).toBe(1);
+    expect(config.maxWorkers).toBe(MIN_WORKERS);
   });
 
-  it("should clamp MINION_MAX_WORKERS to maximum of 5", () => {
+  it("should clamp MINION_MAX_WORKERS to maximum of MAX_WORKERS", () => {
     process.env.MINION_MAX_WORKERS = "10";
     const config = loadConfig();
-    expect(config.maxWorkers).toBe(5);
+    expect(config.maxWorkers).toBe(MAX_WORKERS);
   });
 
-  it("should fall back to default when MINION_MAX_WORKERS is NaN", () => {
+  it("should fall back to DEFAULT_MAX_WORKERS when MINION_MAX_WORKERS is NaN", () => {
     process.env.MINION_MAX_WORKERS = "not-a-number";
     const config = loadConfig();
-    expect(config.maxWorkers).toBe(3);
+    expect(config.maxWorkers).toBe(DEFAULT_MAX_WORKERS);
   });
 
   it("should use custom MINION_WORKER_MAX_TOKENS when set", () => {
@@ -139,45 +145,45 @@ describe("loadConfig", () => {
     });
   });
 
-  it("should accept MINION_MAX_WORKERS at exact boundaries (1 and 5)", () => {
-    process.env.MINION_MAX_WORKERS = "1";
-    expect(loadConfig().maxWorkers).toBe(1);
+  it("should accept MINION_MAX_WORKERS at exact boundaries (MIN_WORKERS and MAX_WORKERS)", () => {
+    process.env.MINION_MAX_WORKERS = String(MIN_WORKERS);
+    expect(loadConfig().maxWorkers).toBe(MIN_WORKERS);
 
-    process.env.MINION_MAX_WORKERS = "5";
-    expect(loadConfig().maxWorkers).toBe(5);
+    process.env.MINION_MAX_WORKERS = String(MAX_WORKERS);
+    expect(loadConfig().maxWorkers).toBe(MAX_WORKERS);
   });
 });
 
 describe("validateWorkerCount", () => {
-  it("should return 3 for non-number input", () => {
-    expect(validateWorkerCount("hello")).toBe(3);
-    expect(validateWorkerCount(null)).toBe(3);
-    expect(validateWorkerCount(undefined)).toBe(3);
+  it("should return DEFAULT_MAX_WORKERS for non-number input", () => {
+    expect(validateWorkerCount("hello")).toBe(DEFAULT_MAX_WORKERS);
+    expect(validateWorkerCount(null)).toBe(DEFAULT_MAX_WORKERS);
+    expect(validateWorkerCount(undefined)).toBe(DEFAULT_MAX_WORKERS);
   });
 
-  it("should return 3 for NaN", () => {
-    expect(validateWorkerCount(NaN)).toBe(3);
+  it("should return DEFAULT_MAX_WORKERS for NaN", () => {
+    expect(validateWorkerCount(NaN)).toBe(DEFAULT_MAX_WORKERS);
   });
 
-  it("should return 3 for non-finite numbers", () => {
-    expect(validateWorkerCount(Infinity)).toBe(3);
-    expect(validateWorkerCount(-Infinity)).toBe(3);
+  it("should return DEFAULT_MAX_WORKERS for non-finite numbers", () => {
+    expect(validateWorkerCount(Infinity)).toBe(DEFAULT_MAX_WORKERS);
+    expect(validateWorkerCount(-Infinity)).toBe(DEFAULT_MAX_WORKERS);
   });
 
-  it("should clamp to 1 for values below 1", () => {
-    expect(validateWorkerCount(0)).toBe(1);
-    expect(validateWorkerCount(-10)).toBe(1);
+  it("should clamp to MIN_WORKERS for values below MIN_WORKERS", () => {
+    expect(validateWorkerCount(0)).toBe(MIN_WORKERS);
+    expect(validateWorkerCount(-10)).toBe(MIN_WORKERS);
   });
 
-  it("should clamp to 5 for values above 5", () => {
-    expect(validateWorkerCount(10)).toBe(5);
-    expect(validateWorkerCount(100)).toBe(5);
+  it("should clamp to MAX_WORKERS for values above MAX_WORKERS", () => {
+    expect(validateWorkerCount(10)).toBe(MAX_WORKERS);
+    expect(validateWorkerCount(100)).toBe(MAX_WORKERS);
   });
 
   it("should return the value when within range", () => {
-    expect(validateWorkerCount(3)).toBe(3);
-    expect(validateWorkerCount(1)).toBe(1);
-    expect(validateWorkerCount(5)).toBe(5);
+    expect(validateWorkerCount(DEFAULT_MAX_WORKERS)).toBe(DEFAULT_MAX_WORKERS);
+    expect(validateWorkerCount(MIN_WORKERS)).toBe(MIN_WORKERS);
+    expect(validateWorkerCount(MAX_WORKERS)).toBe(MAX_WORKERS);
   });
 
   it("should floor float values", () => {
@@ -187,7 +193,7 @@ describe("validateWorkerCount", () => {
   });
 
   it("should clamp floored float values to range", () => {
-    expect(validateWorkerCount(0.9)).toBe(1);
-    expect(validateWorkerCount(5.8)).toBe(5);
+    expect(validateWorkerCount(0.9)).toBe(MIN_WORKERS);
+    expect(validateWorkerCount(5.8)).toBe(MAX_WORKERS);
   });
 });
