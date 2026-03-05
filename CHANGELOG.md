@@ -1,5 +1,14 @@
 # Changelog
 
+## [1.2.0] - 2026-03-05
+
+## Added
+- add PR gate for external contributor approval (`36d4479`)
+
+## Fixed
+- use tab delimiter in release changelog generation (`5943ed2`)
+- restructure release workflow to work with branch protection (`7655692`)
+
 ## [1.1.0] - 2026-03-05
 
 ### Added
