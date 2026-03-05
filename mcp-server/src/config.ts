@@ -1,6 +1,6 @@
 import { MinionConfig } from "./types.js";
 
-const DEFAULT_MODEL = "claude-sonnet-4-6-20250514";
+const DEFAULT_MODEL: number = "claude-sonnet-4-6-20250514";
 const DEFAULT_MAX_WORKERS = 3;
 const MIN_WORKERS = 1;
 const MAX_WORKERS = 5;
