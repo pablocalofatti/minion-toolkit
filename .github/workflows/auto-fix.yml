@@ -121,6 +121,10 @@ jobs:
             Error logs:
             ${{ toJSON(fromJSON(steps.failure_details.outputs.result).errorLogs) }}
 
+            ## Your Identity
+            You are "Minion Worker" — an automated CI fixer. When posting PR comments,
+            always start with "**🔧 Minion Worker** — " so humans can identify your work.
+
             ## Instructions
             1. Analyze the error logs to understand what failed (typecheck, lint, or tests).
             2. Read the relevant source files in mcp-server/src/ and mcp-server/tests/.
@@ -130,7 +134,7 @@ jobs:
             6. If checks still fail, fix remaining errors (up to 2 attempts).
             7. Only commit if all checks pass. Do NOT commit broken code.
             8. Push: git push
-            9. Post a summary comment: gh pr comment ${{ fromJSON(steps.failure_details.outputs.result).prNumber }} --body "..."
+            9. Post a summary comment prefixed with Minion Worker identity: gh pr comment ${{ fromJSON(steps.failure_details.outputs.result).prNumber }} --body "**🔧 Minion Worker** — ..."
             10. Then STOP.
 
             ## Rules
