@@ -1,5 +1,11 @@
 # Changelog
 
+## [1.2.4] - 2026-03-05
+
+### Fixed
+
+- use RELEASE_TOKEN PAT for release bookkeeping push to main (`7c06b63`)
+
 ## [1.2.3] - 2026-03-05
 
 ### Fixed

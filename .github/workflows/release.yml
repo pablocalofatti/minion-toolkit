@@ -28,6 +28,7 @@ jobs:
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
+          token: ${{ secrets.RELEASE_TOKEN }}
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
@@ -146,16 +147,13 @@ jobs:
             --title "v${NEW_VERSION}" \
             --notes-file /tmp/release-notes.md
         env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_TOKEN: ${{ secrets.RELEASE_TOKEN }}
 
       - name: Update CHANGELOG.md and package.json
         if: steps.bump.outputs.skip != 'true'
         run: |
           NEW_VERSION="${{ steps.bump.outputs.new_version }}"
           DATE=$(date +%Y-%m-%d)
-
-          # Configure git with PAT for push auth
-          git remote set-url origin "https://x-access-token:${{ secrets.RELEASE_TOKEN }}@github.com/${{ github.repository }}.git"
 
           # Update package.json version
           cd mcp-server
