@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.3.0] - 2026-03-05
+
+### Added
+- v2 pipeline completion — strict mode, auto-PR, setup guide (#11) (`0986ea3`)
+
+### Other
+- v1.2.5 — update changelog and version (`e4cdd3d`)
+
 ## [1.2.5] - 2026-03-05
 
 ### Fixed
