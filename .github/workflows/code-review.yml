@@ -1,0 +1,45 @@
+# Claude Code Review — automated PR review via anthropics/claude-code-action
+# Requires ANTHROPIC_API_KEY secret set in Repository Settings > Secrets and variables > Actions
+# Install the Claude GitHub App first: https://github.com/apps/claude
+
+name: Claude Code Review
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+  issue_comment:
+    types: [created]
+  pull_request_review_comment:
+    types: [created]
+
+jobs:
+  review:
+    # Run on PR events always; on comment events only when @claude is mentioned
+    if: |
+      github.event_name == 'pull_request' ||
+      (github.event_name == 'issue_comment' && contains(github.event.comment.body, '@claude')) ||
+      (github.event_name == 'pull_request_review_comment' && contains(github.event.comment.body, '@claude'))
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: write
+      issues: write
+      id-token: write
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
+      - name: Run Claude Code Review
+        uses: anthropics/claude-code-action@v1
+        with:
+          anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
+          prompt: |
+            Review this PR for:
+            1. Correctness and potential bugs
+            2. Security vulnerabilities
+            3. TypeScript best practices (no `any`, proper error handling)
+            4. Code quality and maintainability
+            Post inline comments on specific lines where improvements are needed.
+            Be concise — focus on actionable feedback, not style nitpicks.
