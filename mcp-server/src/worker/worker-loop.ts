@@ -1,5 +1,7 @@
 import Anthropic from "@anthropic-ai/sdk";
 import { MinionConfig, WorkerResult, WorkerStatus } from "../types.js";
+
+const MS_PER_SECOND = 1000;
 import {
   WORKER_TOOL_DEFINITIONS,
   executeWorkerTool,
@@ -39,7 +41,7 @@ export async function runWorkerLoop(
           "failed",
           startTime,
           iteration,
-          `Worker timed out after ${Math.round(timeout / 1000)}s`
+          `Worker timed out after ${Math.round(timeout / MS_PER_SECOND)}s`
         );
       }
 

@@ -1,6 +1,8 @@
 import { getSession } from "../orchestrator/session-store.js";
 import { WorkerState } from "../types.js";
 
+const MS_PER_SECOND = 1000;
+
 interface StatusInput {
   session_id: string;
 }
@@ -19,7 +21,7 @@ export function minionStatus(input: StatusInput): string {
     cancelled: "[CANCELLED]",
   };
 
-  const elapsed = Math.round((Date.now() - session.startedAt) / 1000);
+  const elapsed = Math.round((Date.now() - session.startedAt) / MS_PER_SECOND);
 
   const rows = Array.from(session.workers.values())
     .sort((a, b) => a.taskNumber - b.taskNumber)

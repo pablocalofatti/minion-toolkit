@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { MinionSession, ParsedTask, ProjectCommands } from "../types.js";
 
+const SESSION_ID_LENGTH = 8;
 const sessions = new Map<string, MinionSession>();
 
 export function createSession(
@@ -10,7 +11,7 @@ export function createSession(
   commands: ProjectCommands
 ): MinionSession {
   const session: MinionSession = {
-    id: randomUUID().slice(0, 8),
+    id: randomUUID().slice(0, SESSION_ID_LENGTH),
     projectRoot,
     baseBranch,
     tasks,

@@ -16,6 +16,28 @@ export default tseslint.config(
         "error",
         { argsIgnorePattern: "^_" },
       ],
+      // Catch magic numbers — forces extraction to named constants
+      "@typescript-eslint/no-magic-numbers": [
+        "error",
+        {
+          ignore: [0, 1, -1],
+          enforceConst: true,
+          ignoreArrayIndexes: true,
+          ignoreEnums: true,
+          ignoreNumericLiteralTypes: true,
+          ignoreTypeIndexes: true,
+          ignoreReadonlyClassProperties: true,
+        },
+      ],
+      // Catch empty catch blocks (no-op error swallowing)
+      "no-empty": ["error", { allowEmptyCatch: false }],
+    },
+  },
+  // Relax magic numbers in test files — tests naturally use literal values
+  {
+    files: ["tests/**/*.ts"],
+    rules: {
+      "@typescript-eslint/no-magic-numbers": "off",
     },
   },
   {

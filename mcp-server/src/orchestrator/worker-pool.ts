@@ -144,7 +144,8 @@ async function getChangedFiles(worktreePath: string): Promise<string[]> {
       .trim()
       .split("\n")
       .filter(Boolean);
-  } catch {
+  } catch (err: unknown) {
+    console.error(`getChangedFiles failed for ${worktreePath}: ${String(err)}`);
     return [];
   }
 }

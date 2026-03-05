@@ -1,5 +1,7 @@
 import { getSession } from "../orchestrator/session-store.js";
 
+const MS_PER_SECOND = 1000;
+
 interface ResultsInput {
   session_id: string;
 }
@@ -27,7 +29,7 @@ export function minionResults(input: ResultsInput): string {
 
   const rows = results.map((r) => {
     const status = r.state === "completed" ? "SUCCESS" : r.state.toUpperCase();
-    const duration = `${Math.round(r.duration / 1000)}s`;
+    const duration = `${Math.round(r.duration / MS_PER_SECOND)}s`;
     const files =
       r.filesChanged.length > 0
         ? r.filesChanged.join(", ")

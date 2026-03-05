@@ -55,7 +55,8 @@ export async function removeAllWorktrees(projectRoot: string): Promise<void> {
   try {
     await rm(worktreeDir, { recursive: true, force: true });
     await execFileAsync("git", ["worktree", "prune"], { cwd: projectRoot });
-  } catch {
-    // Best-effort cleanup
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : "Unknown cleanup error";
+    console.error(`removeAllWorktrees failed for ${projectRoot}: ${message}`);
   }
 }

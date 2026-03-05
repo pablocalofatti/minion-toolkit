@@ -8,6 +8,8 @@ const execFileAsync = promisify(execFile);
 
 const COMMAND_TIMEOUT_MS = 30_000;
 const MAX_OUTPUT_LENGTH = 8_000;
+const BYTES_PER_KB = 1024;
+const MAX_BUFFER_BYTES = BYTES_PER_KB * BYTES_PER_KB;
 
 function safePath(worktreeRoot: string, filePath: string): string {
   const resolved = isAbsolute(filePath)
@@ -214,7 +216,7 @@ async function runCommandTool(
     const { stdout, stderr } = await execFileAsync("bash", ["-c", command], {
       cwd: worktreeRoot,
       timeout: COMMAND_TIMEOUT_MS,
-      maxBuffer: 1024 * 1024,
+      maxBuffer: MAX_BUFFER_BYTES,
     });
     const output = [stdout, stderr].filter(Boolean).join("\n");
     return truncateOutput(output || "(no output)");
@@ -259,7 +261,7 @@ async function searchFilesTool(
     const { stdout } = await execFileAsync("grep", args, {
       cwd: worktreeRoot,
       timeout: COMMAND_TIMEOUT_MS,
-      maxBuffer: 1024 * 1024,
+      maxBuffer: MAX_BUFFER_BYTES,
     });
     return truncateOutput(stdout);
   } catch {

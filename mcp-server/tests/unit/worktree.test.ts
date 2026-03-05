@@ -155,9 +155,27 @@ describe("removeAllWorktrees", () => {
     );
   });
 
-  it("should handle errors gracefully (best-effort cleanup)", async () => {
+  it("should log error and resolve when cleanup fails with Error", async () => {
     vi.mocked(rm).mockRejectedValueOnce(new Error("rm failed"));
+    const consoleSpy = vi.spyOn(console, "error").mockImplementation(() => {});
 
     await expect(removeAllWorktrees("/project")).resolves.toBeUndefined();
+
+    expect(consoleSpy).toHaveBeenCalledWith(
+      expect.stringContaining("rm failed")
+    );
+    consoleSpy.mockRestore();
+  });
+
+  it("should log fallback message when cleanup fails with non-Error", async () => {
+    vi.mocked(rm).mockRejectedValueOnce("string rejection");
+    const consoleSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+
+    await expect(removeAllWorktrees("/project")).resolves.toBeUndefined();
+
+    expect(consoleSpy).toHaveBeenCalledWith(
+      expect.stringContaining("Unknown cleanup error")
+    );
+    consoleSpy.mockRestore();
   });
 });
