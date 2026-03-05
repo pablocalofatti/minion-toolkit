@@ -35,8 +35,9 @@ jobs:
         uses: anthropics/claude-code-action@v1
         with:
           claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
-          model: claude-opus-4-6-20250415
-          show_full_output: true
+          claude_args: >-
+            --model claude-opus-4-6-20250415
+            --allowedTools "mcp__github_inline_comment__create_inline_comment,Bash(gh pr comment:*),Bash(gh pr diff:*),Bash(gh pr view:*)"
           prompt: |
             You are a senior staff engineer performing a thorough code review.
             Read the CLAUDE.md at the repository root for the full engineering standards.
@@ -49,6 +50,7 @@ jobs:
             5. **Anti-patterns** — primitive obsession, boolean blindness, shotgun surgery, temporal coupling, train wreck calls
             6. **Code smells** — deep nesting (>2 levels), long functions (>40 lines), empty catches, mutable shared state, magic numbers
 
-            Post inline comments on specific lines. Be direct and actionable.
-            For each issue, state: what's wrong, why it matters, and how to fix it.
+            For EVERY issue you find, use the create_inline_comment tool to post an inline comment on the exact line.
+            Be direct and actionable. State: what's wrong, why it matters, and how to fix it.
             Do NOT comment on style preferences or formatting — focus on substance.
+            After posting all inline comments, leave a summary comment on the PR using `gh pr comment`.
