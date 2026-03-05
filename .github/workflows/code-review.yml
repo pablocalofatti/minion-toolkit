@@ -35,11 +35,19 @@ jobs:
         uses: anthropics/claude-code-action@v1
         with:
           claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          model: claude-opus-4-6-20250415
           prompt: |
+            You are a senior staff engineer performing a thorough code review.
+            Read the CLAUDE.md at the repository root for the full engineering standards.
+
             Review this PR for:
-            1. Correctness and potential bugs
-            2. Security vulnerabilities
-            3. TypeScript best practices (no `any`, proper error handling)
-            4. Code quality and maintainability
-            Post inline comments on specific lines where improvements are needed.
-            Be concise — focus on actionable feedback, not style nitpicks.
+            1. **Correctness** — logic errors, off-by-one, race conditions, null handling
+            2. **Security** — injection, credential exposure, path traversal, unsafe input
+            3. **TypeScript strictness** — no `any`, no `var`, no non-null assertions, proper error handling
+            4. **Architecture (Martin Fowler school)** — SRP, dependency inversion, leaky abstractions, God objects, anemic models, feature envy
+            5. **Anti-patterns** — primitive obsession, boolean blindness, shotgun surgery, temporal coupling, train wreck calls
+            6. **Code smells** — deep nesting (>2 levels), long functions (>40 lines), empty catches, mutable shared state, magic numbers
+
+            Post inline comments on specific lines. Be direct and actionable.
+            For each issue, state: what's wrong, why it matters, and how to fix it.
+            Do NOT comment on style preferences or formatting — focus on substance.
