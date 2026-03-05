@@ -1,30 +1,30 @@
-# Release — auto-bump version and update changelog on push to main.
+# Release — auto-bump version and create GitHub Release on push to main.
 # Reads conventional commit messages since last tag to determine semver bump.
-# Creates a version commit + git tag, then pushes.
+# Creates a git tag + GitHub Release with auto-generated changelog.
+# Version is tracked via git tags; CHANGELOG.md is updated via a PR.
 
 name: Release
 
 on:
   push:
     branches: [main]
-    paths-ignore:
-      - 'CHANGELOG.md'
-      - 'mcp-server/package.json'
 
 jobs:
   release:
-    # Skip if the push is from the release bot itself (prevent loop)
-    if: "!startsWith(github.event.head_commit.message, 'chore(release):')"
+    # Skip release commits and changelog PRs
+    if: >-
+      !startsWith(github.event.head_commit.message, 'chore(release):') &&
+      !startsWith(github.event.head_commit.message, 'docs(changelog):')
     runs-on: ubuntu-latest
     timeout-minutes: 5
     permissions:
       contents: write
+      pull-requests: write
     steps:
       - name: Checkout
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
-          token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
@@ -82,18 +82,14 @@ jobs:
           echo "new_version=$NEW_VERSION" >> $GITHUB_OUTPUT
           echo "::notice::Bumping $CURRENT_VERSION → $NEW_VERSION ($BUMP)"
 
-      - name: Generate changelog entry
+      - name: Generate release notes
         if: steps.bump.outputs.skip != 'true'
-        id: changelog
+        id: notes
         run: |
           NEW_VERSION="${{ steps.bump.outputs.new_version }}"
           COMMIT_RANGE="${{ steps.bump.outputs.commit_range }}"
-          DATE=$(date +%Y-%m-%d)
 
-          # Build changelog entry from conventional commits
-          ENTRY="## [${NEW_VERSION}] - ${DATE}"$'\n'
-
-          # Group commits by type (use tab as delimiter to avoid IFS issues)
+          # Group commits by type (use tab as delimiter)
           if [ "$COMMIT_RANGE" = "HEAD" ]; then
             COMMITS=$(git log --pretty=format:"%s%x09%h" --reverse)
           else
@@ -118,24 +114,47 @@ jobs:
             fi
           done <<< "$COMMITS"
 
+          # Build release body
+          BODY=""
           if [ -n "$FEATURES" ]; then
-            ENTRY="${ENTRY}"$'\n'"### Added"$'\n'"${FEATURES}"$'\n'
+            BODY="${BODY}## Added${FEATURES}"$'\n\n'
           fi
           if [ -n "$FIXES" ]; then
-            ENTRY="${ENTRY}"$'\n'"### Fixed"$'\n'"${FIXES}"$'\n'
+            BODY="${BODY}## Fixed${FIXES}"$'\n\n'
           fi
           if [ -n "$OTHER" ]; then
-            ENTRY="${ENTRY}"$'\n'"### Other"$'\n'"${OTHER}"$'\n'
+            BODY="${BODY}## Other${OTHER}"$'\n\n'
           fi
 
-          # Save entry to file for next step
-          echo "$ENTRY" > /tmp/changelog-entry.md
-          cat /tmp/changelog-entry.md
+          # Save to file (avoids shell quoting issues)
+          echo "$BODY" > /tmp/release-notes.md
+          cat /tmp/release-notes.md
 
-      - name: Update package.json version
+      - name: Create tag and GitHub Release
         if: steps.bump.outputs.skip != 'true'
         run: |
           NEW_VERSION="${{ steps.bump.outputs.new_version }}"
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git tag "v${NEW_VERSION}"
+          git push --tags
+
+          gh release create "v${NEW_VERSION}" \
+            --title "v${NEW_VERSION}" \
+            --notes-file /tmp/release-notes.md
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Update CHANGELOG.md and package.json via PR
+        if: steps.bump.outputs.skip != 'true'
+        run: |
+          NEW_VERSION="${{ steps.bump.outputs.new_version }}"
+          DATE=$(date +%Y-%m-%d)
+          BRANCH="chore/release-v${NEW_VERSION}"
+
+          git checkout -b "$BRANCH"
+
+          # Update package.json version
           cd mcp-server
           node -e "
             const fs = require('fs');
@@ -143,34 +162,30 @@ jobs:
             pkg.version = '${NEW_VERSION}';
             fs.writeFileSync('package.json', JSON.stringify(pkg, null, 2) + '\n');
           "
-          echo "Updated mcp-server/package.json to ${NEW_VERSION}"
+          cd ..
 
-      - name: Update CHANGELOG.md
-        if: steps.bump.outputs.skip != 'true'
-        run: |
-          ENTRY=$(cat /tmp/changelog-entry.md)
+          # Build changelog entry
+          NOTES=$(cat /tmp/release-notes.md)
+          ENTRY="## [${NEW_VERSION}] - ${DATE}"$'\n\n'"${NOTES}"
 
           if [ -f CHANGELOG.md ]; then
-            # Insert new entry after the header line
             awk -v entry="$ENTRY" '
               /^# Changelog/ { print; print ""; print entry; next }
               { print }
             ' CHANGELOG.md > /tmp/changelog-new.md
             mv /tmp/changelog-new.md CHANGELOG.md
           else
-            echo "# Changelog" > CHANGELOG.md
-            echo "" >> CHANGELOG.md
-            echo "$ENTRY" >> CHANGELOG.md
+            printf "# Changelog\n\n%s\n" "$ENTRY" > CHANGELOG.md
           fi
 
-      - name: Commit and tag
-        if: steps.bump.outputs.skip != 'true'
-        run: |
-          NEW_VERSION="${{ steps.bump.outputs.new_version }}"
-          git config user.name "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
           git add mcp-server/package.json CHANGELOG.md
-          git commit -m "chore(release): v${NEW_VERSION}"
-          git tag "v${NEW_VERSION}"
-          git push
-          git push --tags
+          git commit -m "chore(release): v${NEW_VERSION} — update changelog and version"
+          git push -u origin "$BRANCH"
+
+          gh pr create \
+            --title "chore(release): v${NEW_VERSION}" \
+            --body "Auto-generated release PR for v${NEW_VERSION}. Updates CHANGELOG.md and package.json version." \
+            --base main \
+            --head "$BRANCH"
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
