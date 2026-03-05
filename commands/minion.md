@@ -121,17 +121,34 @@ For each task up to the max parallel worker count, spawn a worker agent:
   - `isolation`: `"worktree"`
   - `run_in_background`: `true`
 
-- The **prompt** sent to each worker MUST include all 7 fields:
+- **Branch naming convention:** Each worker MUST create its own branch from the current HEAD using the format `minion/task-{N}-{slug}`, where `{N}` is the task number and `{slug}` is a lowercase kebab-case summary of the task title (max 40 chars). Example: `minion/task-1-add-user-validation`. The orchestrator computes the branch name and passes it to the worker — workers do NOT choose their own branch names.
+
+- The **prompt** sent to each worker MUST include all 8 fields:
 
 ```
 TASK: {task title}
+TASK NUMBER: {N}
+BRANCH NAME: minion/task-{N}-{slug}
 DESCRIPTION: {full task description}
 CONTEXT FILES: {comma-separated list of files mentioned in the task}
 PROJECT PATH: {absolute path to the project root}
 LINT COMMAND: {resolved lint command, or "none"}
 TEST COMMAND: {resolved test command, or "none"}
 TEAM NAME: {team name from Step 4}
+
+IMPORTANT — When you finish, send your results via SendMessage using this exact format:
+
+--- MINION REPORT ---
+TASK: {N}
+STATUS: {success | partial | lint_failed | test_failed | implementation_failed}
+BRANCH: {your branch name}
+FILES CHANGED: {comma-separated list of files created or modified}
+SUMMARY: {1-2 sentence description of what was done}
+ERRORS: {error details if status is not success, or "none"}
+--- END REPORT ---
 ```
+
+The worker MUST create and work on the specified `BRANCH NAME`. Do not allow workers to deviate from the assigned branch name.
 
 - Use `TaskUpdate` to mark each spawned task as `in_progress` and set `owner` to the worker name.
 
@@ -141,9 +158,22 @@ TEAM NAME: {team name from Step 4}
 
 Wait for worker reports. Workers send results via `SendMessage` when they complete.
 
+**Workers MUST use this structured report format** when sending their completion message:
+
+```
+--- MINION REPORT ---
+TASK: {N}
+STATUS: {success | partial | lint_failed | test_failed | implementation_failed}
+BRANCH: {exact branch name, e.g. minion/task-1-add-user-validation}
+FILES CHANGED: {comma-separated list of files created or modified}
+SUMMARY: {1-2 sentence description of what was done}
+ERRORS: {error details if status is not success, or "none"}
+--- END REPORT ---
+```
+
 For each worker report:
-1. Parse the status: `success`, `partial`, `lint_failed`, `test_failed`, or `implementation_failed`
-2. Record the branch name, files changed, and any error details
+1. Parse the structured report — extract `TASK`, `STATUS`, `BRANCH`, `FILES CHANGED`, `SUMMARY`, and `ERRORS`
+2. If the report is malformed or missing fields, log a warning but extract what you can
 3. Use `TaskUpdate` to mark the task as `completed`
 4. If there are queued tasks remaining, spawn the next worker (go back to Step 6 logic)
 
