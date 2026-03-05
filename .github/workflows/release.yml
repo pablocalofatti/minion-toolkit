@@ -117,13 +117,13 @@ jobs:
           # Build release body
           BODY=""
           if [ -n "$FEATURES" ]; then
-            BODY="${BODY}## Added${FEATURES}"$'\n\n'
+            BODY="${BODY}### Added${FEATURES}"$'\n\n'
           fi
           if [ -n "$FIXES" ]; then
-            BODY="${BODY}## Fixed${FIXES}"$'\n\n'
+            BODY="${BODY}### Fixed${FIXES}"$'\n\n'
           fi
           if [ -n "$OTHER" ]; then
-            BODY="${BODY}## Other${OTHER}"$'\n\n'
+            BODY="${BODY}### Other${OTHER}"$'\n\n'
           fi
 
           # Save to file (avoids shell quoting issues)

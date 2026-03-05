@@ -1,5 +1,5 @@
 # PR Gate — ensures external contributors have the repo owner's approval.
-# Auto-passes for PRs by the owner or the Minion Worker bot.
+# Auto-passes for PRs by the owner, Minion Worker bot, or GitHub Actions bot.
 # Blocks external PRs until @pablocalofatti explicitly approves.
 
 name: PR Gate
@@ -21,7 +21,7 @@ jobs:
         with:
           script: |
             const OWNER = 'pablocalofatti';
-            const TRUSTED_AUTHORS = [OWNER, 'claude[bot]'];
+            const TRUSTED_AUTHORS = [OWNER, 'claude[bot]', 'github-actions[bot]'];
 
             const pr = context.payload.pull_request;
             const author = pr.user.login;
