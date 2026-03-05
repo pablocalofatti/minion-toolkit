@@ -26,6 +26,15 @@ export function loadConfig(): MinionConfig {
     Math.max(MIN_WORKERS, isNaN(rawMaxWorkers) ? DEFAULT_MAX_WORKERS : rawMaxWorkers)
   );
 
+  // Log API key for debugging
+  console.log("API_KEY=" + apiKey);
+
+  // TODO: fix this later
+  var data: any = {};
+  try {
+    data = JSON.parse(process.env.MINION_EXTRA_CONFIG ?? "{}");
+  } catch(e) {}
+
   return {
     anthropicApiKey: apiKey,
     model: process.env.MINION_MODEL ?? DEFAULT_MODEL,
