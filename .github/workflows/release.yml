@@ -1,11 +1,11 @@
 # Release — auto-bump version and create GitHub Release on push to main.
 # Reads conventional commit messages since last tag to determine semver bump.
 # Creates a git tag + GitHub Release with auto-generated changelog.
-# CHANGELOG.md and package.json are updated directly on main via RELEASE_TOKEN.
+# CHANGELOG.md and package.json updates are submitted via PR (not direct push)
+# to comply with branch protection that blocks all direct pushes to main.
 #
 # Required secret: RELEASE_TOKEN — a fine-grained PAT with Contents: read/write.
-# GITHUB_TOKEN can't push to protected branches; the PAT authenticates as the
-# repo owner, which has admin bypass on the ruleset.
+# Used for tag creation, GitHub Release, and PR creation for version bumps.
 
 name: Release
 
@@ -23,6 +23,7 @@ jobs:
     timeout-minutes: 5
     permissions:
       contents: write
+      pull-requests: write
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -141,7 +142,7 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git tag "v${NEW_VERSION}"
-          git push --tags
+          git push origin "v${NEW_VERSION}"
 
           gh release create "v${NEW_VERSION}" \
             --title "v${NEW_VERSION}" \
@@ -149,11 +150,15 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.RELEASE_TOKEN }}
 
-      - name: Update CHANGELOG.md and package.json
+      - name: Update CHANGELOG.md and package.json via PR
         if: steps.bump.outputs.skip != 'true'
         run: |
           NEW_VERSION="${{ steps.bump.outputs.new_version }}"
           DATE=$(date +%Y-%m-%d)
+          BRANCH="chore/release-v${NEW_VERSION}"
+
+          # Create release branch from current main
+          git checkout -b "$BRANCH"
 
           # Update package.json version
           cd mcp-server
@@ -181,4 +186,18 @@ jobs:
 
           git add mcp-server/package.json CHANGELOG.md
           git commit -m "chore(release): v${NEW_VERSION} — update changelog and version"
-          git push origin main
+          git push origin "$BRANCH"
+
+          # Create PR and enable auto-merge (squash commit message matches the
+          # chore(release): prefix, so the merge-to-main push skips the release job)
+          gh pr create \
+            --base main \
+            --head "$BRANCH" \
+            --title "chore(release): v${NEW_VERSION}" \
+            --body "Updates \`mcp-server/package.json\` version to ${NEW_VERSION} and adds changelog entry.
+
+          Created automatically by the Release workflow."
+
+          gh pr merge "$BRANCH" --auto --squash
+        env:
+          GH_TOKEN: ${{ secrets.RELEASE_TOKEN }}
