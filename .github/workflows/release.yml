@@ -145,11 +145,14 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Update CHANGELOG.md and package.json on main
+      - name: Update CHANGELOG.md and package.json via PR
         if: steps.bump.outputs.skip != 'true'
         run: |
           NEW_VERSION="${{ steps.bump.outputs.new_version }}"
           DATE=$(date +%Y-%m-%d)
+          BRANCH="chore/release-v${NEW_VERSION}"
+
+          git checkout -b "$BRANCH"
 
           # Update package.json version
           cd mcp-server
@@ -177,4 +180,12 @@ jobs:
 
           git add mcp-server/package.json CHANGELOG.md
           git commit -m "chore(release): v${NEW_VERSION} — update changelog and version"
-          git push origin main
+          git push -u origin "$BRANCH"
+
+          gh pr create \
+            --title "chore(release): v${NEW_VERSION}" \
+            --body "Auto-generated release bookkeeping for v${NEW_VERSION}. Updates CHANGELOG.md and package.json version. Merge with admin bypass (CI won't run on GITHUB_TOKEN-created PRs)." \
+            --base main \
+            --head "$BRANCH"
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
