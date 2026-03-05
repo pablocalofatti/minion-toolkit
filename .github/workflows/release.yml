@@ -93,21 +93,20 @@ jobs:
           # Build changelog entry from conventional commits
           ENTRY="## [${NEW_VERSION}] - ${DATE}"$'\n'
 
-          # Group commits by type
+          # Group commits by type (use tab as delimiter to avoid IFS issues)
           if [ "$COMMIT_RANGE" = "HEAD" ]; then
-            COMMITS=$(git log --pretty=format:"%s|||%h" --reverse)
+            COMMITS=$(git log --pretty=format:"%s%x09%h" --reverse)
           else
-            COMMITS=$(git log ${COMMIT_RANGE} --pretty=format:"%s|||%h" --reverse)
+            COMMITS=$(git log ${COMMIT_RANGE} --pretty=format:"%s%x09%h" --reverse)
           fi
 
           FEATURES=""
           FIXES=""
           OTHER=""
 
-          while IFS='|||' read -r MSG HASH; do
+          while IFS=$'\t' read -r MSG HASH; do
             [ -z "$MSG" ] && continue
             if [[ "$MSG" == feat:* ]] || [[ "$MSG" == feat\(*\):* ]]; then
-              # Strip prefix
               CLEAN=$(echo "$MSG" | sed 's/^feat[^:]*: //')
               FEATURES="${FEATURES}"$'\n'"- ${CLEAN} (\`${HASH}\`)"
             elif [[ "$MSG" == fix:* ]] || [[ "$MSG" == fix\(*\):* ]]; then
