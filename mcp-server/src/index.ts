@@ -7,6 +7,18 @@ import { minionStatus } from "./tools/minion-status.js";
 import { minionResults } from "./tools/minion-results.js";
 import { minionCreatePRs } from "./tools/minion-create-prs.js";
 import { minionCleanup } from "./tools/minion-cleanup.js";
+import { parseTasks } from "./orchestrator/task-parser.js";
+import { resolveDAG } from "./orchestrator/resolve-dag.js";
+import type { InputTask } from "./orchestrator/resolve-dag.js";
+import { estimateCost } from "./orchestrator/estimate-cost.js";
+import type { TaskWave } from "./orchestrator/estimate-cost.js";
+import { checkScope } from "./orchestrator/check-scope.js";
+import type { TaskResult, ScopedTask } from "./orchestrator/check-scope.js";
+import { integrationReport } from "./orchestrator/integration-report.js";
+import type {
+  ReportResult,
+  ReportViolation,
+} from "./orchestrator/integration-report.js";
 
 const config = loadConfig();
 
@@ -133,6 +145,153 @@ server.registerTool(
       remove_branches: args.remove_branches,
     });
     return { content: [{ type: "text" as const, text: result }] };
+  }
+);
+
+// --- Tool: parse_tasks ---
+server.registerTool(
+  "parse_tasks",
+  {
+    title: "Parse Task Markdown",
+    description:
+      "Parse a tasks markdown file into structured task objects with " +
+      "dependencies, file scope, and skip markers ([DONE]/[SKIP]).",
+    inputSchema: z.object({
+      markdown: z
+        .string()
+        .describe(
+          "Markdown with ### Task N: headings. " +
+            "Supports **Files:** and **Depends:** lines."
+        ),
+    }),
+  },
+  (args: { markdown: string }) => {
+    const tasks = parseTasks(args.markdown);
+    return { content: [{ type: "text" as const, text: JSON.stringify(tasks) }] };
+  }
+);
+
+// --- Tool: resolve_dag ---
+server.registerTool(
+  "resolve_dag",
+  {
+    title: "Resolve Task DAG",
+    description:
+      "Compute execution waves from task dependencies using topological sort. " +
+      "Returns waves (parallel groups), critical path, and cycle detection.",
+    inputSchema: z.object({
+      tasks: z.array(
+        z.object({
+          number: z.number(),
+          title: z.string(),
+          dependsOn: z.array(z.number()),
+          skip: z.boolean(),
+        })
+      ),
+    }),
+  },
+  (args: { tasks: InputTask[] }) => {
+    const result = resolveDAG(args.tasks);
+    return { content: [{ type: "text" as const, text: JSON.stringify(result) }] };
+  }
+);
+
+// --- Tool: estimate_cost ---
+server.registerTool(
+  "estimate_cost",
+  {
+    title: "Estimate Session Cost",
+    description:
+      "Estimate API token cost for a set of task waves based on model pricing. " +
+      "Returns per-task costs, orchestrator cost, and total.",
+    inputSchema: z.object({
+      waves: z.array(
+        z.object({
+          tasks: z.array(z.object({ description: z.string() })),
+        })
+      ),
+      orchestrator_model: z
+        .string()
+        .describe("Model for orchestrator, e.g. claude-sonnet-4-6"),
+      worker_model: z
+        .string()
+        .describe("Model for workers, e.g. claude-sonnet-4-6"),
+    }),
+  },
+  (args: {
+    waves: TaskWave[];
+    orchestrator_model: string;
+    worker_model: string;
+  }) => {
+    const result = estimateCost(
+      args.waves,
+      args.orchestrator_model,
+      args.worker_model
+    );
+    return { content: [{ type: "text" as const, text: JSON.stringify(result) }] };
+  }
+);
+
+// --- Tool: check_scope ---
+server.registerTool(
+  "check_scope",
+  {
+    title: "Check File Scope",
+    description:
+      "Compare files changed by workers against declared file scope. " +
+      "Returns violations (out-of-scope files) and clean count.",
+    inputSchema: z.object({
+      results: z.array(
+        z.object({
+          taskNumber: z.number(),
+          taskTitle: z.string(),
+          filesChanged: z.array(z.string()),
+        })
+      ),
+      tasks: z.array(
+        z.object({
+          number: z.number(),
+          files: z.array(z.string()),
+        })
+      ),
+    }),
+  },
+  (args: { results: TaskResult[]; tasks: ScopedTask[] }) => {
+    const result = checkScope(args.results, args.tasks);
+    return { content: [{ type: "text" as const, text: JSON.stringify(result) }] };
+  }
+);
+
+// --- Tool: integration_report ---
+server.registerTool(
+  "integration_report",
+  {
+    title: "Generate Integration Report",
+    description:
+      "Generate a markdown integration report from worker results " +
+      "and scope violations. Returns markdown table and stats.",
+    inputSchema: z.object({
+      results: z.array(
+        z.object({
+          taskNumber: z.number(),
+          taskTitle: z.string(),
+          state: z.enum(["completed", "failed", "cancelled"]),
+          branch: z.string(),
+          filesChanged: z.array(z.string()),
+        })
+      ),
+      violations: z.array(
+        z.object({
+          taskNumber: z.number(),
+          taskTitle: z.string(),
+          outOfScopeFiles: z.array(z.string()),
+        })
+      ),
+    }),
+  },
+  (args: { results: ReportResult[]; violations: ReportViolation[] }) => {
+    const result = integrationReport(args.results, args.violations);
+    return { content: [{ type: "text" as const, text: JSON.stringify(result) }] };
   }
 );
 

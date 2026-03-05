@@ -1,6 +1,8 @@
 import { getSession } from "../orchestrator/session-store.js";
 import { createPullRequest } from "../git/pr.js";
 
+const MS_PER_SECOND = 1000;
+
 interface CreatePRsInput {
   session_id: string;
   task_numbers?: number[];
@@ -39,7 +41,7 @@ export async function minionCreatePRs(
         body: [
           `## Task ${result.taskNumber}: ${result.taskTitle}`,
           ``,
-          `Implemented by Minion worker in ${Math.round(result.duration / 1000)}s (${result.iterations} iterations).`,
+          `Implemented by Minion worker in ${Math.round(result.duration / MS_PER_SECOND)}s (${result.iterations} iterations).`,
           ``,
           `### Files Changed`,
           result.filesChanged.length > 0

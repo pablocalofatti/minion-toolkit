@@ -33,12 +33,11 @@ async function detectPackageManager(
   projectRoot: string
 ): Promise<PackageManager> {
   for (const [lockfile, manager] of Object.entries(LOCKFILE_MAP)) {
-    try {
-      await access(join(projectRoot, lockfile));
-      return manager;
-    } catch {
-      // Lockfile not found, try next
-    }
+    const exists = await access(join(projectRoot, lockfile)).then(
+      () => true,
+      () => false
+    );
+    if (exists) return manager;
   }
   return "npm";
 }

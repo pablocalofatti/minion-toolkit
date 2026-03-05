@@ -1,4 +1,9 @@
-const MODEL_COSTS_PER_1K: Record<string, number> = {
+const MODEL_TIERS = ["opus", "haiku", "sonnet"] as const;
+type ModelTier = (typeof MODEL_TIERS)[number];
+
+const DEFAULT_MODEL_TIER: ModelTier = "sonnet";
+
+const MODEL_COSTS_PER_1K: Record<ModelTier, number> = {
   opus: 0.075,
   sonnet: 0.015,
   haiku: 0.005,
@@ -25,15 +30,16 @@ export interface CostEstimate {
   totalCostUsd: number;
 }
 
-function resolveModelKey(model: string): string {
+function resolveModelKey(model: string): ModelTier {
   const lower = model.toLowerCase();
-  if (lower.includes("opus")) return "opus";
-  if (lower.includes("haiku")) return "haiku";
-  return "sonnet";
+  const matched = MODEL_TIERS.find((tier) => lower.includes(tier));
+  return matched ?? DEFAULT_MODEL_TIER;
 }
 
+const TOKENS_PER_UNIT = 1000;
+
 function costForTokens(tokens: number, pricePerThousand: number): number {
-  return (tokens / 1000) * pricePerThousand;
+  return (tokens / TOKENS_PER_UNIT) * pricePerThousand;
 }
 
 export function estimateCost(
@@ -41,8 +47,8 @@ export function estimateCost(
   orchestratorModel: string,
   workerModel: string
 ): CostEstimate {
-  const workerPrice = MODEL_COSTS_PER_1K[resolveModelKey(workerModel)] ?? MODEL_COSTS_PER_1K["sonnet"];
-  const orchestratorPrice = MODEL_COSTS_PER_1K[resolveModelKey(orchestratorModel)] ?? MODEL_COSTS_PER_1K["sonnet"];
+  const workerPrice = MODEL_COSTS_PER_1K[resolveModelKey(workerModel)];
+  const orchestratorPrice = MODEL_COSTS_PER_1K[resolveModelKey(orchestratorModel)];
 
   const allTasks = waves.flatMap((w) => w.tasks);
   const taskCount = allTasks.length;

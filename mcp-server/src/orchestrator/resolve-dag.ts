@@ -25,15 +25,15 @@ function filterActiveTasks(tasks: InputTask[]): InputTask[] {
 function buildInDegreeMap(
   activeTasks: InputTask[],
   activeNumbers: Set<number>
-): Map<number, number> {
-  const inDegree = new Map<number, number>();
+): Record<number, number> {
+  const inDegree: Record<number, number> = {};
   for (const task of activeTasks) {
-    if (!inDegree.has(task.number)) {
-      inDegree.set(task.number, 0);
-    }
+    inDegree[task.number] = 0;
+  }
+  for (const task of activeTasks) {
     for (const dep of task.dependsOn) {
       if (activeNumbers.has(dep)) {
-        inDegree.set(task.number, (inDegree.get(task.number) ?? 0) + 1);
+        inDegree[task.number] += 1;
       }
     }
   }
@@ -43,17 +43,15 @@ function buildInDegreeMap(
 function buildAdjacencyList(
   activeTasks: InputTask[],
   activeNumbers: Set<number>
-): Map<number, number[]> {
-  const adj = new Map<number, number[]>();
+): Record<number, number[]> {
+  const adj: Record<number, number[]> = {};
   for (const task of activeTasks) {
-    if (!adj.has(task.number)) {
-      adj.set(task.number, []);
-    }
+    adj[task.number] = [];
+  }
+  for (const task of activeTasks) {
     for (const dep of task.dependsOn) {
       if (activeNumbers.has(dep)) {
-        const list = adj.get(dep) ?? [];
-        list.push(task.number);
-        adj.set(dep, list);
+        adj[dep].push(task.number);
       }
     }
   }
@@ -61,49 +59,44 @@ function buildAdjacencyList(
 }
 
 function computeCriticalPath(
-  activeTasks: InputTask[],
   activeNumbers: Set<number>,
   processedOrder: number[],
-  taskMap: Map<number, InputTask>
+  taskLookup: Record<number, InputTask>
 ): number[] {
-  const longestPath = new Map<number, number>();
-  const predecessor = new Map<number, number | null>();
+  const longestPath: Record<number, number> = {};
+  const predecessor: Record<number, number | undefined> = {};
 
   for (const num of processedOrder) {
-    longestPath.set(num, 1);
-    predecessor.set(num, null);
+    longestPath[num] = 1;
+    predecessor[num] = undefined;
   }
 
   for (const num of processedOrder) {
-    const task = taskMap.get(num);
-    if (!task) continue;
+    const task = taskLookup[num];
     for (const dep of task.dependsOn) {
       if (!activeNumbers.has(dep)) continue;
-      const depLen = longestPath.get(dep) ?? 0;
-      const candidate = depLen + 1;
-      if (candidate > (longestPath.get(num) ?? 1)) {
-        longestPath.set(num, candidate);
-        predecessor.set(num, dep);
+      const candidate = longestPath[dep] + 1;
+      if (candidate > longestPath[num]) {
+        longestPath[num] = candidate;
+        predecessor[num] = dep;
       }
     }
   }
 
   let maxLen = 0;
-  let endNode = -1;
-  for (const [num, len] of longestPath.entries()) {
-    if (len > maxLen) {
-      maxLen = len;
+  let endNode = processedOrder[0];
+  for (const num of processedOrder) {
+    if (longestPath[num] > maxLen) {
+      maxLen = longestPath[num];
       endNode = num;
     }
   }
 
-  if (endNode === -1) return [];
-
   const path: number[] = [];
-  let current: number | null = endNode;
-  while (current !== null) {
+  let current: number | undefined = endNode;
+  while (current !== undefined) {
     path.unshift(current);
-    current = predecessor.get(current) ?? null;
+    current = predecessor[current];
   }
 
   return path;
@@ -117,7 +110,10 @@ export function resolveDAG(tasks: InputTask[]): DAGResult {
   }
 
   const activeNumbers = new Set(activeTasks.map((t) => t.number));
-  const taskMap = new Map(activeTasks.map((t) => [t.number, t]));
+  const taskLookup: Record<number, InputTask> = {};
+  for (const t of activeTasks) {
+    taskLookup[t.number] = t;
+  }
   const inDegree = buildInDegreeMap(activeTasks, activeNumbers);
   const adj = buildAdjacencyList(activeTasks, activeNumbers);
 
@@ -128,7 +124,7 @@ export function resolveDAG(tasks: InputTask[]): DAGResult {
   let waveNumber = 1;
   while (remaining.size > 0) {
     const currentWave = [...remaining].filter(
-      (num) => (inDegree.get(num) ?? 0) === 0
+      (num) => inDegree[num] === 0
     );
 
     if (currentWave.length === 0) {
@@ -141,11 +137,7 @@ export function resolveDAG(tasks: InputTask[]): DAGResult {
       };
     }
 
-    const waveTasks = currentWave.map((num) => {
-      const task = taskMap.get(num);
-      if (!task) throw new Error(`Task ${num} not found in map`);
-      return task;
-    });
+    const waveTasks = currentWave.map((num) => taskLookup[num]);
 
     waves.push({
       number: waveNumber,
@@ -156,8 +148,8 @@ export function resolveDAG(tasks: InputTask[]): DAGResult {
     for (const num of currentWave) {
       processedOrder.push(num);
       remaining.delete(num);
-      for (const neighbor of adj.get(num) ?? []) {
-        inDegree.set(neighbor, (inDegree.get(neighbor) ?? 0) - 1);
+      for (const neighbor of adj[num]) {
+        inDegree[neighbor] -= 1;
       }
     }
 
@@ -165,10 +157,9 @@ export function resolveDAG(tasks: InputTask[]): DAGResult {
   }
 
   const criticalPath = computeCriticalPath(
-    activeTasks,
     activeNumbers,
     processedOrder,
-    taskMap
+    taskLookup
   );
 
   return { waves, criticalPath, hasCycle: false };
