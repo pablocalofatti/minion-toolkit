@@ -1,5 +1,5 @@
 # Claude Code Review — automated PR review via anthropics/claude-code-action
-# Requires ANTHROPIC_API_KEY secret set in Repository Settings > Secrets and variables > Actions
+# Requires CLAUDE_CODE_OAUTH_TOKEN secret (from `claude setup-token`)
 # Install the Claude GitHub App first: https://github.com/apps/claude
 
 name: Claude Code Review
@@ -34,7 +34,7 @@ jobs:
       - name: Run Claude Code Review
         uses: anthropics/claude-code-action@v1
         with:
-          anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
+          claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
           prompt: |
             Review this PR for:
             1. Correctness and potential bugs
