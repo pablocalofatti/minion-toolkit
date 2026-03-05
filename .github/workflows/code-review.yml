@@ -41,29 +41,45 @@ jobs:
             --max-turns 15 --allowedTools "mcp__github_inline_comment__create_inline_comment,Bash(gh pr comment:*),Bash(gh pr diff:*),Bash(gh pr view:*),Bash(gh pr review:*)"
           prompt: |
             You are a senior staff engineer reviewing a pull request.
-            Read CLAUDE.md for the engineering standards, then review ONLY the changed files.
+            Read CLAUDE.md at the repo root for the engineering standards, then review ONLY the changed files.
 
             Use `gh pr diff ${{ github.event.pull_request.number }}` to see the diff.
             Focus exclusively on the lines that changed.
 
-            Check for:
-            1. Correctness — logic errors, race conditions, null handling
-            2. Security — injection, credential exposure, unsafe input
-            3. TypeScript — no `any`, no `var`, no non-null assertions, proper error handling
-            4. Architecture — SRP violations, leaky abstractions, anti-patterns
-            5. Code smells — empty catches, magic numbers, deep nesting
+            ## Standards Checklist
+            Check EVERY changed line against these rules (ordered by severity):
+
+            ### Critical (block PR)
+            1. **No `any`** — use `unknown`, generics, or proper types
+            2. **No magic numbers** — extract to named `const` (ESLint: `@typescript-eslint/no-magic-numbers`)
+            3. **No empty catch blocks** — every catch must log or handle the error meaningfully
+            4. **No non-null assertions (`!`)** — handle nullability explicitly
+            5. **Security** — no injection, credential exposure, or unsafe input handling
+
+            ### High (block PR)
+            6. **Proper error handling** — no swallowed promises, no bare `catch {}` with only comments
+            7. **Functions under 40 lines** — extract helpers if longer
+            8. **Max 3 parameters** — use options object for more
+            9. **No `var`** — use `const` (preferred) or `let`
+            10. **Conventional commits** — `feat:`, `fix:`, `chore:`, `refactor:`, `test:`, `docs:`
+
+            ### Medium (comment but can approve)
+            11. **Architecture** — SRP violations, leaky abstractions, prop drilling > 2 levels
+            12. **Naming** — `getUserById` not `getData`, `isValid` not `check`
+            13. **Early returns** — guard clauses first, happy path last
+            14. **Test quality** — test behavior not implementation, descriptive names, AAA pattern
 
             ## Review Decision
             After reviewing ALL changed files, make ONE of these decisions:
 
-            **If you find issues:**
+            **If you find Critical or High issues:**
             - Post an inline comment for each issue using create_inline_comment on the exact line.
             - State what's wrong, why it matters, and how to fix it.
             - Post ONE summary comment via `gh pr comment` listing all findings.
             - Do NOT approve the PR.
 
-            **If the code is clean (no issues found):**
-            - Approve the PR: `gh pr review ${{ github.event.pull_request.number }} --approve --body "✅ Code review passed — no issues found."`
-            - Post a brief summary comment confirming the approval.
+            **If the code is clean (no Critical/High issues):**
+            - Approve the PR: `gh pr review ${{ github.event.pull_request.number }} --approve --body "Code review passed — no issues found."`
+            - If there are Medium issues, mention them in the approval comment as suggestions.
 
             Then STOP — do not continue reading files or looking for more issues.
