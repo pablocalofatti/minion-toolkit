@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.2.5] - 2026-03-05
+
+### Fixed
+- pass RELEASE_TOKEN to checkout step for git credential auth (`71da889`)
+
+### Other
+- trigger release workflow with updated RELEASE_TOKEN (`0bda158`)
+
 ## [1.2.4] - 2026-03-05
 
 ### Fixed
