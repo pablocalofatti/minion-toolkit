@@ -349,6 +349,9 @@ Also create a `TaskCreate` entry for the Wave 0 task so it appears in the task t
 Before proceeding, present a summary and ask for confirmation using `AskUserQuestion`.
 
 Display:
+- **Workflow:** `{workflow_name}` — {workflow description from template}
+- **Phases:** {ordered phase list with arrows} (e.g., "plan → implement → review")
+- **Platform:** {detected platform} (e.g., "claude-code")
 - **Available agents:** list all discovered agents with their model (e.g., "my-backend-agent (sonnet), my-frontend-agent (sonnet)"), or "none — using minion-worker for all tasks" if no agents found
 - **Tasks to run:** numbered list with title AND assigned agent:
   ```
@@ -414,7 +417,7 @@ For each task in the current wave, up to the max parallel worker count, spawn a 
 
 - **Branch naming convention:** Each worker MUST create its own branch from the current HEAD using the format `minion/task-{N}-{slug}`, where `{N}` is the task number and `{slug}` is a lowercase kebab-case summary of the task title (max 40 chars). Example: `minion/task-1-add-user-validation`. The orchestrator computes the branch name and passes it to the worker — workers do NOT choose their own branch names.
 
-- The **prompt** sent to each worker MUST include all 9 fields:
+- The **prompt** sent to each worker MUST include all fields below. When a workflow with multiple phases is active, include the phase fields; otherwise omit them for v1 compatibility:
 
 ```
 TASK: {task title}
@@ -427,13 +430,20 @@ LINT COMMAND: {resolved lint command, or "none"}
 TEST COMMAND: {resolved test command, or "none"}
 TEAM NAME: {team name from Step 4}
 AGENT TYPE: {resolved agent_type from Step 1.7, e.g. "my-backend-agent" or "minion-worker"}
+WORKFLOW: {workflow name, e.g. "tdd" — omit if "default"}
+PHASE: {current phase name, e.g. "plan", "implement", "review" — omit if using default workflow}
+PHASE PROMPT: {resolved prompt from workflow template, with {task} replaced by actual task title + description — omit if using default workflow}
+ARTIFACT PATH: {resolved artifact path, e.g. ".minion/task-1-add-validation/implement.md" — omit if using default workflow}
+PREVIOUS ARTIFACTS: {comma-separated list of artifact paths from completed phases, or "none" — omit if using default workflow or first phase}
 
 IMPORTANT — When you finish, send your results via SendMessage using this exact format:
 
 --- MINION REPORT ---
 TASK: {N}
+PHASE: {phase name, or "implement" if not in a multi-phase workflow}
 STATUS: {success | partial | lint_failed | test_failed | implementation_failed}
 BRANCH: {your branch name}
+ARTIFACT: {path to artifact file written, or "none"}
 FILES CHANGED: {comma-separated list of files created or modified}
 OUT-OF-SCOPE FILES: {files modified outside the task's Files: declaration, or "none"}
 SUMMARY: {1-2 sentence description of what was done}
@@ -456,8 +466,10 @@ Wait for worker reports. Workers send results via `SendMessage` when they comple
 ```
 --- MINION REPORT ---
 TASK: {N}
+PHASE: {phase name, or "implement" if not in a multi-phase workflow}
 STATUS: {success | partial | lint_failed | test_failed | implementation_failed}
 BRANCH: {exact branch name, e.g. minion/task-1-add-user-validation}
+ARTIFACT: {path to artifact file written, or "none"}
 FILES CHANGED: {comma-separated list of files created or modified}
 OUT-OF-SCOPE FILES: {files modified outside the task's Files: declaration, or "none"}
 SUMMARY: {1-2 sentence description of what was done}
@@ -466,7 +478,7 @@ ERRORS: {error details if status is not success, or "none"}
 ```
 
 For each worker report:
-1. Parse the structured report — extract `TASK`, `STATUS`, `BRANCH`, `FILES CHANGED`, `OUT-OF-SCOPE FILES`, `SUMMARY`, and `ERRORS`
+1. Parse the structured report — extract `TASK`, `PHASE`, `STATUS`, `BRANCH`, `ARTIFACT`, `FILES CHANGED`, `OUT-OF-SCOPE FILES`, `SUMMARY`, and `ERRORS`
 2. If the report is malformed or missing fields, log a warning but extract what you can
 3. Use `TaskUpdate` to mark the task as `completed`
 4. If there are queued tasks remaining, spawn the next worker (go back to Step 6 logic)
