@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.3.2] - 2026-03-06
+
+### Fixed
+- add pipeline watch loop, conflict recovery, and git hardening (#14) (`707ec76`)
+
+### Other
+- v1.3.1 — update changelog and version (#13) (`6866c42`)
+
 ## [1.3.1] - 2026-03-06
 
 ### Fixed
