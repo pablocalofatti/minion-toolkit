@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.3.1] - 2026-03-06
+
+### Fixed
+- block direct pushes to main, release uses PR for version bumps (#12) (`a28abfa`)
+
+### Other
+- v1.3.0 — update changelog and version (`d2ce4ed`)
+
 ## [1.3.0] - 2026-03-05
 
 ### Added
