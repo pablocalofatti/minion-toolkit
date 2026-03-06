@@ -334,7 +334,15 @@ Below the table, show:
 
 ## Step 9: Create PRs and Enable Auto-Merge
 
-Automatically create pull requests for all **successful** tasks and enable auto-merge. No user interaction required — the GitHub Actions pipeline handles the rest autonomously.
+Automatically create pull requests for all **successful** tasks and enable auto-merge. The orchestrator then monitors the pipeline in Step 9.5.
+
+Before creating PRs, ensure the `minion-managed` label exists in the repository:
+
+```
+gh label create "minion-managed" --description "PR managed by Minion orchestrator — auto-fix workflows skip these" --color "1d76db" --force
+```
+
+This label tells the GitHub Actions auto-fix workflows to skip this PR — the orchestrator's local fix workers handle it instead.
 
 For each successful task:
 
@@ -343,11 +351,12 @@ For each successful task:
    git push origin {branch-name}
    ```
 
-2. **Create a PR** with the task context:
+2. **Create a PR** with the task context and the `minion-managed` label:
    ```
    gh pr create --base main --head {branch-name} \
      --title "feat: {task title}" \
-     --body "## Task {N}: {task title}\n\n{task description}\n\n---\nCreated by Minion Orchestrator."
+     --body "## Task {N}: {task title}\n\n{task description}\n\n---\nCreated by Minion Orchestrator." \
+     --label "minion-managed"
    ```
 
 3. **Enable auto-merge** so the PR merges once all checks pass:
@@ -356,6 +365,18 @@ For each successful task:
    ```
 
 4. **Collect the PR URL** from the `gh pr create` output.
+
+5. **Extract the PR number** from the URL (the last path segment) and store it alongside the task metadata. The watch loop in Step 9.5 needs the PR number to poll status.
+
+For each PR, the orchestrator must track:
+- `pr_number`: the GitHub PR number (e.g., 42)
+- `pr_url`: the full PR URL
+- `branch`: the branch name
+- `task_number`: the original task number
+- `task_title`: the task title
+- `task_description`: the full task description
+- `context_files`: files mentioned in the task
+- `fix_cycles`: initialized to 0
 
 After processing all successful tasks, display:
 
@@ -367,10 +388,11 @@ After processing all successful tasks, display:
 ```
 
 Below the table, explain what happens next:
+- The orchestrator now enters the **Pipeline Watch Loop** (Step 9.5) to monitor these PRs
 - **CI** runs typecheck + lint + test:coverage on each PR
 - **Claude Code Review** reviews the diff and either approves or posts inline comments
-- **Auto Fix** handles CI failures and review comments automatically
-- **Auto-merge** triggers when all required checks pass
+- If issues are found, the orchestrator spawns **fix workers with your task's original context** to address them
+- Once all checks pass and the PR is approved, **auto-merge** squashes it into main
 
 If `gh pr merge --auto` fails (auto-merge not enabled in repo settings), warn the user:
 ```
@@ -381,14 +403,246 @@ PRs were created but will require manual merge.
 
 **Failed tasks** are not included in PR creation. Their branches are preserved for manual fixes or retry.
 
+## Step 9.5: Watch Pipeline
+
+After creating PRs, the orchestrator stays alive to monitor the CI and code review pipeline. When issues are detected, it spawns fix workers with the original task context to address them — the workers that built the code are the ones that fix it.
+
+### Watch List
+
+Maintain a watch list of all PRs created in Step 9. Each entry tracks:
+- `pr_number`, `pr_url`, `branch`
+- `task_number`, `task_title`, `task_description`, `context_files`
+- `fix_cycles`: starts at 0, max 2
+- `state`: `watching` | `fixing` | `merged` | `gave_up` | `timed_out`
+- `started_at`: timestamp when the PR entered the watch loop
+
+### Polling Loop
+
+Poll every **60 seconds**. Each cycle, check ALL PRs where `state == "watching"`:
+
+1. **Check PR state and mergeability:**
+   ```
+   gh pr view {pr_number} --json state,mergedAt,mergeable
+   ```
+   - If PR is merged → set `state = "merged"`, remove from watch list
+   - If PR is closed (not merged) → set `state = "gave_up"`, remove from watch list
+   - If `mergeable: "CONFLICTING"` → **the PR has merge conflicts** (likely caused by another PR merging first). GitHub Actions will NOT trigger CI on conflicting PRs. Jump to the **Conflict Recovery** section below.
+   - If `mergeable: "UNKNOWN"` → GitHub is still computing, skip this PR this cycle
+
+2. **Check if pipeline has settled** (no checks still running):
+   ```
+   gh pr checks {pr_number} --json name,state,bucket
+   ```
+   - If any check has `state: "pending"` or `state: "in_progress"` → skip this PR this cycle (pipeline still settling)
+   - If `gh pr checks` returns "no checks reported" for more than 2 consecutive cycles → re-check mergeable state. This usually means conflicts are blocking CI.
+
+3. **Check CI result:**
+   - Look for the `ci` check in the results
+   - If `bucket: "fail"` → CI errors need fixing (note: the field is `bucket`, NOT `conclusion`)
+
+4. **Collect CI error logs** (only if CI failed):
+   ```
+   gh run list --branch {branch} --workflow "CI" --limit 1 --json databaseId,conclusion
+   ```
+   Then fetch failed job logs:
+   ```
+   gh api repos/{owner}/{repo}/actions/runs/{run_id}/jobs --jq '.jobs[] | select(.conclusion == "failure") | .id'
+   ```
+   For each failed job:
+   ```
+   gh api repos/{owner}/{repo}/actions/jobs/{job_id}/logs
+   ```
+   Truncate logs to last 8000 characters per job.
+
+5. **Check for unreplied review comments:**
+   ```
+   gh api repos/{owner}/{repo}/pulls/{pr_number}/comments --jq '[.[] | select(.in_reply_to_id == null)] | map({id, path, line: (.line // .original_line), body: .body[:500]})'
+   ```
+   Cross-reference with replies — a comment is "unreplied" if no other comment has `in_reply_to_id` matching its `id`.
+
+6. **Determine action:**
+   - If CI passed AND no unreplied comments AND PR is approved → auto-merge is queued, just wait
+   - If CI failed OR unreplied comments exist:
+     - If `fix_cycles >= 2` → set `state = "gave_up"`, mark as needs manual intervention
+     - Else → spawn a fix worker (see Fix Worker Prompt below)
+
+7. **Check global timeout:**
+   - If `(now - started_at) > 30 minutes` → set `state = "timed_out"`
+
+### Conflict Recovery
+
+When a PR has `mergeable: "CONFLICTING"`, another PR merged into main and created conflicts. GitHub Actions will NOT run CI on conflicting PRs, so you must resolve this:
+
+1. **Clone fresh to a temp directory** (avoid local git corruption from worktrees):
+   ```
+   cd /tmp && git clone {repo_url} minion-rebase-{task_number}
+   cd minion-rebase-{task_number}
+   ```
+
+2. **Create a new branch from main**, cherry-pick the task's files from the PR branch:
+   ```
+   git checkout -b {branch}-rebased main
+   git checkout origin/{branch} -- {list of task files from CONTEXT FILES}
+   ```
+
+3. **Resolve any config file conflicts** — prefer main's version of shared configs (`package.json`, `tsconfig.json`, `eslint.config.js`), then apply only the task-specific changes on top.
+
+4. **Run the full check** (`lint + typecheck + test:coverage`) to verify everything integrates.
+
+5. **Commit and force-push** to the PR branch:
+   ```
+   git push origin {branch}-rebased:{branch} --force
+   ```
+
+6. **Disable then re-enable auto-merge** to ensure it triggers fresh after the force-push:
+   ```
+   gh pr merge {pr_number} --disable-auto
+   gh pr merge {pr_number} --auto --squash
+   ```
+
+7. **Clean up** the temp clone.
+
+**IMPORTANT:** After force-pushing, wait at least 30 seconds before checking PR state — GitHub needs time to update the mergeable status and trigger new check suites.
+
+**Git hardening for all git commands** (prevents hangs and SIGBUS in automated contexts):
+```
+GIT_PAGER=cat git --no-optional-locks -c pack.windowMemory=10m -c pack.threads=1 {command}
+```
+
+### Display
+
+Every poll cycle where state changes, display an updated status table:
+
+```
+Pipeline Watch — cycle {N} ({elapsed} elapsed)
+
+| PR  | Task                  | CI     | Review     | Fixes | State    |
+|-----|-----------------------|--------|------------|-------|----------|
+| #42 | Add user validation   | passed | approved   | 0/2   | merging  |
+| #43 | Fix pagination bug    | failed | pending    | 1/2   | fixing   |
+| #44 | Add search endpoint   | passed | 2 comments | 0/2   | fixing   |
+```
+
+### Spawning Fix Workers
+
+When a PR needs fixing, spawn a fresh `minion-worker` with the original task context plus the pipeline feedback. The fix worker is NOT in a worktree — it checks out the existing PR branch.
+
+Use the `Agent` tool with:
+- `subagent_type`: `"minion-worker"`
+- `name`: `"fixer-{task_number}"` (e.g., `fixer-1`)
+- `team_name`: the team name from Step 4
+- `run_in_background`: `true`
+- Do NOT use `isolation: "worktree"` — the fix worker operates on the existing branch
+
+Set `state = "fixing"` for this PR and increment `fix_cycles`.
+
+### Fix Worker Prompt
+
+The prompt MUST include the original task context AND all pipeline feedback in a single prompt:
+
+```
+TASK: {original task title}
+TASK NUMBER: {N}
+FIX CYCLE: {fix_cycles} of 2
+BRANCH NAME: {existing branch name — do NOT create a new branch}
+DESCRIPTION: {original full task description from the tasks file}
+CONTEXT FILES: {original file list from the task}
+PROJECT PATH: {absolute path to project root}
+LINT COMMAND: {resolved lint command}
+TEST COMMAND: {resolved test command}
+TEAM NAME: {team name}
+PR NUMBER: {GitHub PR number}
+
+## Pipeline Feedback to Address
+
+### CI Errors
+{If CI failed, paste the error logs here (last 8000 chars per failed job).}
+{If CI passed, write: "CI passed — no errors."}
+
+### Review Comments
+{For each unreplied comment:}
+- Comment ID: {id}
+  File: {path} Line: {line}
+  Comment: "{body}"
+{If no unreplied comments, write: "No review comments to address."}
+
+## Scope Rules
+
+Your task scope is defined by DESCRIPTION and CONTEXT FILES above. For each issue:
+
+1. **In scope** — the issue is in code you wrote for this task → FIX IT
+2. **Out of scope** — the issue is about functionality outside this task → DO NOT fix it.
+   Reply to the review comment:
+   "Out of scope for Task {N} ({title}). This concerns functionality outside this task and should be addressed separately."
+3. **Pre-existing** — the issue exists in code that was NOT modified by this PR → DO NOT fix it.
+   Reply to the review comment:
+   "Pre-existing issue — this code was not modified by this PR. The issue exists in the base branch."
+
+## Instructions
+
+1. Checkout the branch (use git hardening to prevent hangs):
+   GIT_PAGER=cat git --no-optional-locks -c pack.windowMemory=10m fetch origin {branch}
+   git checkout {branch}
+   GIT_PAGER=cat git --no-optional-locks pull origin {branch}
+2. Read the relevant source files to understand the current state
+3. For each CI error: fix the root cause in your task's files
+4. For each review comment: decide scope (fix / out-of-scope / pre-existing), then act accordingly
+5. Reply to EACH review comment on GitHub:
+   - For fixes: gh api "repos/{owner}/{repo}/pulls/{pr_number}/comments/{comment_id}/replies" -f body="Fixed: {brief description}"
+   - For out-of-scope: reply with the out-of-scope message above
+   - For pre-existing: reply with the pre-existing message above
+6. Run: {lint_command} && {test_command}
+7. If all checks pass: git add -A && git commit -m "fix(review): address pipeline feedback"
+8. Push (use git hardening): GIT_PAGER=cat git --no-optional-locks -c pack.windowMemory=10m -c pack.threads=1 push origin {branch}
+9. Send your results via SendMessage using the standard MINION REPORT format
+
+IMPORTANT: Do NOT create a new branch. Work on the existing branch.
+IMPORTANT: Handle ALL issues (CI + review) in a SINGLE commit.
+IMPORTANT: Do NOT suppress errors with @ts-ignore, eslint-disable, or skip().
+IMPORTANT: Always prefix git commands with `GIT_PAGER=cat git --no-optional-locks` to prevent hangs in automated contexts.
+```
+
+### Fix Worker Completion
+
+When the fix worker reports back via SendMessage:
+1. Parse the MINION REPORT
+2. Set the PR's `state` back to `"watching"` — the pipeline will re-run (CI + review triggered by the push)
+3. The next poll cycle will detect the settling pipeline and wait for it to complete
+4. If the fix worker reports failure, still set `state = "watching"` — the next poll cycle will detect the still-failing CI and either spawn another fix worker (if cycles remain) or give up
+
+### Exit Conditions
+
+The watch loop exits when ALL PRs reach a terminal state:
+
+| State | Meaning |
+|-------|---------|
+| `merged` | PR auto-merged. Task fully complete. |
+| `gave_up` | 2 fix cycles exhausted. Needs manual intervention. |
+| `timed_out` | 30-minute global timeout. Pipeline may be stuck. |
+
+When the loop exits, display a final summary:
+
+```
+Pipeline Watch Complete
+
+| PR  | Task                  | Final State | Fix Cycles Used |
+|-----|-----------------------|-------------|-----------------|
+| #42 | Add user validation   | merged      | 0               |
+| #43 | Fix pagination bug    | gave_up     | 2               |
+| #44 | Add search endpoint   | merged      | 1               |
+
+Merged: 2/3
+Needs manual fix: 1 (PR #43 — Fix pagination bug)
+```
+
 ## Step 10: Offer Follow-Up Actions
 
 Use `AskUserQuestion` to present follow-up options:
 
-1. **Retry failed** — re-run only the failed tasks with fresh workers (go back to Step 6)
+1. **Retry failed** — re-run only the failed/gave-up tasks with fresh workers (go back to Step 6)
 2. **Done** — proceed to cleanup
 
-If there are no failed tasks, skip this step entirely and go directly to cleanup.
+If there are no failed tasks and no `gave_up` PRs from the watch loop, skip this step entirely and go directly to cleanup.
 
 ## Step 11: Cleanup
 
@@ -408,3 +662,10 @@ Wrap up the session:
 | Worker timeout (15 min) | Mark the task as failed with `timeout` status, include in summary |
 | All workers fail | Suggest running tasks individually with `/minion-worker` or manual implementation |
 | Team creation fails | Fall back to sequential execution without teams — run each task one at a time in the main session |
+| Watch loop timeout (30 min) | Mark PR as `timed_out`, include in final summary. Suggest checking GitHub Actions directly. |
+| Fix worker fails both cycles | Mark PR as `gave_up`. Offer retry in Step 10 or manual fix via the preserved branch. |
+| PR has merge conflicts (`mergeable: CONFLICTING`) | Another PR merged first. Use the **Conflict Recovery** procedure in Step 9.5 — clone fresh, cherry-pick task files onto main, force-push. |
+| "no checks reported" on PR | Usually means merge conflicts blocking CI. Check `mergeable` field. If `CONFLICTING`, run conflict recovery. |
+| Git commands hang (no output) | Add `GIT_PAGER=cat` and `--no-optional-locks` to all git commands. Other processes (Xcode, IDEs) may hold locks. |
+| `pack-objects died of signal 10` (SIGBUS) | Git object corruption from worktree operations. Clone fresh to `/tmp`, work there, push. Add `-c pack.windowMemory=10m -c pack.threads=1` to push commands. |
+| Auto-merge triggers before CI runs | Force-push can cause immediate merge if no pending checks. Disable auto-merge before force-push, re-enable after CI starts. |
