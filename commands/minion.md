@@ -12,8 +12,11 @@ You are **team-aware**: before spawning workers, you discover available agents (
 
 The user's input is in `$ARGUMENTS`.
 
-- If `$ARGUMENTS` contains a file path (e.g., `tasks.md`, `speckit/tasks.md`), read that file.
-- If `$ARGUMENTS` is empty, look for `speckit/tasks.md` in the current project working directory.
+- **Parse workflow flag:** Check if `$ARGUMENTS` contains `--workflow {name}`. If present, extract `{name}` as the workflow name and remove the `--workflow {name}` portion from arguments before parsing the task file path. Store the workflow name.
+- **Parse platform flag:** Check if `$ARGUMENTS` contains `--platform {name}`. If present, extract `{name}` as the platform override and remove it from arguments. Store the platform name.
+- If no `--workflow` flag, set workflow name to `default`.
+- If `$ARGUMENTS` (after flag removal) contains a file path (e.g., `tasks.md`, `speckit/tasks.md`), read that file.
+- If `$ARGUMENTS` is empty after flag removal, look for `speckit/tasks.md` in the current project working directory.
 - If the file is not found, tell the user and show the expected format (see below).
 
 Parse the file for tasks. Each task is a markdown section with a heading like:
@@ -60,6 +63,95 @@ The `Agent` field is optional. If omitted, the orchestrator auto-detects the bes
 
 
 If zero actionable tasks remain after filtering, inform the user and stop.
+
+## Step 1.3: Resolve Workflow
+
+Locate and parse the workflow template for this run.
+
+### Locate Template
+
+Search for the workflow file in priority order:
+1. `{project_root}/.claude/workflows/{workflow_name}.md`
+2. `~/.claude/workflows/{workflow_name}.md`
+
+If not found, list available workflows from both locations and stop with an error message:
+```
+Workflow "{workflow_name}" not found. Available workflows:
+- default — Standard implementation with PR-based code review
+- tdd — Test-driven development pipeline
+- quick — Fast prototyping, no review
+- full-pipeline — Enterprise pipeline with auto-fix
+```
+
+### Parse Template
+
+Read the workflow file and extract:
+
+**From YAML frontmatter:**
+- `name` — workflow identifier
+- `description` — human-readable description
+- `default_agent` — fallback agent for phases without explicit Agent (default: `minion-worker`)
+- `platforms` — list of supported platforms (informational)
+
+**From each `## Phase:` section (in document order):**
+- **Phase name** — text after `## Phase:` (e.g., `plan`, `implement`, `review`)
+- **Prompt** — value after `- Prompt:` (template string, may contain `{task}`, `{task_slug}`, `{task_number}`)
+- **Artifact** — value after `- Artifact:` (file path, may contain `{task_slug}`)
+- **Agent** — value after `- Agent:` (agent name, defaults to `default_agent` if not specified)
+- **Gate** — value after `- Gate:` (`artifact` or `exit`, defaults to `artifact`)
+- **Command** — nested block under `- Command:` with `canonical:` and optional platform overrides (e.g., `claude-code:`, `opencode:`, `codex:`)
+
+Store phases as an **ordered list** — phase execution follows document order.
+
+### Detect Platform
+
+Determine the current platform (first match wins):
+1. Explicit `--platform {name}` flag from Step 1 → use it
+2. `$MINION_PLATFORM` environment variable → use its value
+3. Running inside Claude Code → `claude-code`
+4. `~/.config/opencode/` exists → `opencode`
+5. `~/.codex/` exists → `codex`
+6. Fallback → `claude-code`
+
+### Translate Commands
+
+For each phase, resolve the command for the detected platform:
+1. If the phase has an explicit override for the current platform under its `Command:` block → use it
+2. If not, auto-translate from the `canonical` command using these rules:
+   - `claude-code`: `"/" + canonical` (keep `:` separator) — e.g., `minion:plan` → `/minion:plan`
+   - `opencode`: `"/" + canonical.replace(":", "-")` — e.g., `minion:plan` → `/minion-plan`
+   - `codex`: `"$" + canonical.replace(":", "-")` — e.g., `minion:plan` → `$minion-plan`
+
+### Validate
+
+Check the resolved workflow for errors:
+- At least one phase is defined — error: "Workflow has no phases defined"
+- No duplicate phase names — error: "Duplicate phase name: {name}"
+- All referenced agents exist in the agent registry (from Step 1.7) or match `default_agent` — warning: "Agent '{name}' not found, will use minion-worker"
+- All artifact paths contain `{task_slug}` placeholder — warning: "Artifact path missing {task_slug} — artifacts may overwrite across tasks"
+- All phases have a `Prompt` value — error: "Phase '{name}' has no Prompt"
+
+If any error is found, report it and stop. Warnings are displayed but execution continues.
+
+### Artifact Directory Setup
+
+1. Create the `.minion/` directory in the project root if it doesn't exist
+2. Add `.minion/` to the project's `.gitignore` if not already present (append a new line `.minion/` to the file)
+3. Write `run.json` to `.minion/`:
+
+```json
+{
+  "run_id": "minion-{timestamp}",
+  "workflow": "{workflow_name}",
+  "platform": "{detected_platform}",
+  "started_at": "{ISO timestamp}",
+  "tasks": ["{list of task numbers}"],
+  "waves": ["{wave arrays from Step 1.5}"],
+  "max_parallel": "{N}"
+}
+```
+
+Note: `waves` and `max_parallel` fields are populated after Step 1.5 and Step 3 respectively. Initialize them as empty/null and update later.
 
 ## Step 1.5: Resolve Dependencies
 
