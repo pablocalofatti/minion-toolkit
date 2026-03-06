@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.4.0] - 2026-03-06
+
+### Added
+- add team-aware agent discovery and assignment (#16) (`a1f5e3f`)
+
+### Other
+- v1.3.2 — update changelog and version (#15) (`f68f995`)
+
 ## [1.3.2] - 2026-03-06
 
 ### Fixed
