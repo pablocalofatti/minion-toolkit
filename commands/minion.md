@@ -100,6 +100,8 @@ Read the workflow file and extract:
 - **Agent** — value after `- Agent:` (agent name, defaults to `default_agent` if not specified)
 - **Gate** — value after `- Gate:` (`artifact` or `exit`, defaults to `artifact`)
 - **Command** — nested block under `- Command:` with `canonical:` and optional platform overrides (e.g., `claude-code:`, `opencode:`, `codex:`)
+- **Cycle** — value after `- Cycle:` (phase name to jump back to after this phase completes successfully, or `null` if not set)
+- **Max-cycles** — value after `- Max-cycles:` (integer, defaults to `3` if `Cycle` is set, ignored if `Cycle` is not set)
 
 Store phases as an **ordered list** — phase execution follows document order.
 
@@ -130,6 +132,9 @@ Check the resolved workflow for errors:
 - All referenced agents exist in the agent registry (from Step 1.7) or match `default_agent` — warning: "Agent '{name}' not found, will use minion-worker"
 - All artifact paths contain `{task_slug}` placeholder — warning: "Artifact path missing {task_slug} — artifacts may overwrite across tasks"
 - All phases have a `Prompt` value — error: "Phase '{name}' has no Prompt"
+- Cycle target must exist and precede the declaring phase — error: "Cycle target '{name}' must appear before phase '{current}' in document order"
+- Only one phase may declare `Cycle` per workflow — error: "Only one cycle per workflow is supported. Phases '{first}' and '{second}' both declare Cycle"
+- `Max-cycles` without `Cycle` — warning: "Max-cycles ignored on phase '{name}' — no Cycle target defined"
 
 If any error is found, report it and stop. Warnings are displayed but execution continues.
 
@@ -435,13 +440,15 @@ PHASE: {current phase name, e.g. "plan", "implement", "review" — omit if using
 PHASE PROMPT: {resolved prompt from workflow template, with {task} replaced by actual task title + description — omit if using default workflow}
 ARTIFACT PATH: {resolved artifact path, e.g. ".minion/task-1-add-validation/implement.md" — omit if using default workflow}
 PREVIOUS ARTIFACTS: {comma-separated list of artifact paths from completed phases, or "none" — omit if using default workflow or first phase}
+CYCLE: {cycle_target} → {current_phase} (iteration {cycle_count + 1} of {max_cycles}) — omit if phase has no Cycle or is not a cycle target
+CYCLE INSTRUCTION: Report STATUS: success if no issues found (exits the cycle). Report STATUS: review_failed if issues remain (triggers another fix iteration). — omit if not inside a cycle
 
 IMPORTANT — When you finish, send your results via SendMessage using this exact format:
 
 --- MINION REPORT ---
 TASK: {N}
 PHASE: {phase name, or "implement" if not in a multi-phase workflow}
-STATUS: {success | partial | lint_failed | test_failed | implementation_failed}
+STATUS: {success | partial | lint_failed | test_failed | implementation_failed | review_failed}
 BRANCH: {your branch name}
 ARTIFACT: {path to artifact file written, or "none"}
 FILES CHANGED: {comma-separated list of files created or modified}
@@ -467,7 +474,7 @@ Wait for worker reports. Workers send results via `SendMessage` when they comple
 --- MINION REPORT ---
 TASK: {N}
 PHASE: {phase name, or "implement" if not in a multi-phase workflow}
-STATUS: {success | partial | lint_failed | test_failed | implementation_failed}
+STATUS: {success | partial | lint_failed | test_failed | implementation_failed | review_failed}
 BRANCH: {exact branch name, e.g. minion/task-1-add-user-validation}
 ARTIFACT: {path to artifact file written, or "none"}
 FILES CHANGED: {comma-separated list of files created or modified}
@@ -486,7 +493,33 @@ For each worker report:
 
 4. **Phase progression check:**
    - Look up the task's workflow phases (ordered list from Step 1.3)
-   - Find the **next phase** after the completed one
+   - Determine if the completed phase is involved in a cycle:
+     - **Is it a cycle target?** (i.e., another phase's `Cycle` property points to this phase name)
+     - **Does it have a `Cycle` property?** (i.e., it declares `Cycle: {target}`)
+
+   **Case A — Cycle target phase completed with `success` (e.g., review passes):**
+   - EXIT CYCLE. The review found no issues.
+   - Skip the cycling phase (fix) entirely — do not spawn it.
+   - Advance to whatever phase comes **after** the cycling phase in document order.
+   - If no phase comes after the cycling phase → task is fully complete. Use `TaskUpdate` to mark the task as `completed`.
+
+   **Case B — Cycle target phase completed with non-`success` status (e.g., `review_failed`):**
+   - Continue normally to the next phase (the cycling phase, e.g., fix).
+   - Spawn the fix worker as usual — treat `review_failed` as a valid "proceed to fix" signal, NOT as a task failure.
+   - Use the standard spawn logic (Agent tool with worktree isolation, background execution, full prompt from Step 6).
+
+   **Case C — Cycling phase completed (e.g., fix completes with `success`):**
+   - Read the task's `cycle_count` from `status.json` (default `0`).
+   - **If `cycle_count < max_cycles`:**
+     - Increment `cycle_count` in `status.json`.
+     - CYCLE BACK: Reset the phase pointer to the cycle target phase (review).
+     - Update the artifact path for the target phase with version suffix: `review-{cycle_count + 1}.md` (e.g., `review-2.md` for the second iteration). First iteration has no suffix.
+     - Spawn a new worker for the cycle target phase with the versioned artifact path and accumulated `PREVIOUS ARTIFACTS`.
+   - **If `cycle_count >= max_cycles`:**
+     - MAX REACHED. Log a warning: "Max cycles ({max_cycles}) reached for task {N}. Continuing despite unresolved issues."
+     - Advance to whatever phase comes **after** the cycling phase in document order (or complete the task).
+
+   **Case D — Normal phase (not involved in any cycle):**
    - **If next phase exists AND status is `success`:**
      - Update `status.json`: set next phase to `in_progress`
      - Resolve the next phase's agent (from workflow template)
@@ -529,6 +562,7 @@ When creating or updating `.minion/{task_slug}/status.json`, write the full JSON
       "status": "completed | in_progress | pending | skipped",
       "agent": "{agent_name}",
       "artifact": "{artifact_path or null}",
+      "cycle_count": "{integer, only present on cycle target phases, default 0}",
       "started_at": "{ISO timestamp or null}",
       "completed_at": "{ISO timestamp or null}"
     }
@@ -539,6 +573,8 @@ When creating or updating `.minion/{task_slug}/status.json`, write the full JSON
 ```
 
 Initialize `status.json` when the first phase starts (Step 6 — set all phases to `pending`, first phase to `in_progress`). Update it on each phase completion (this step).
+
+For cycle target phases, initialize `cycle_count` to `0`. Increment it each time the cycle resets (Case C in Step 7). Non-cycle phases do not have a `cycle_count` field.
 
 ## Step 8: Present Summary
 
