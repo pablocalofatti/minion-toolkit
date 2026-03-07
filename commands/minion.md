@@ -169,16 +169,21 @@ If `resume_mode` is `true`:
 
 1. Check for `.minion/run.json` in the project root. If not found, warn: "No previous run found — starting fresh." Set `resume_mode = false` and continue normally.
 
-2. Read `.minion/run.json` and extract the previous run's `workflow`, `tasks`, and `started_at`.
+2. Read `.minion/run.json` and extract the previous run's `workflow`, `tasks`, and `started_at`. If `.minion/run.json` exists but cannot be parsed as valid JSON, warn: "Previous run state is corrupted — starting fresh." Set `resume_mode = false` and continue normally.
 
-3. For each task from Step 1, check for `.minion/{task_slug}/status.json`:
-   - If `status.json` exists, read it and determine the task's current state:
+3. **Workflow compatibility check:** Compare the current workflow name with the previous run's `workflow` field. If they differ, warn: "Workflow changed from {previous} to {current}. Resume may produce unexpected results if phase names differ." Ask the user whether to continue or abort.
+
+4. **Task list validation:** Compare the current task count and titles with the previous run. If the number of tasks differs or any task title changed, warn: "Task list has changed since the previous run." List the differences. Resume matches tasks by `task_slug` (derived from title), not by task number — so reordered tasks will still match correctly. New tasks without a status.json are treated as fresh. Tasks that existed in the previous run but are no longer in the task file are ignored.
+
+5. For each task from Step 1, check for `.minion/{task_slug}/status.json`:
+   - If `status.json` exists but is invalid JSON, treat that task as a fresh task (not started) and warn: "Corrupt status for task {N} ({title}) — will re-run from scratch."
+   - If `status.json` exists and is valid, read it and determine the task's current state:
      - If `current_phase` is `"completed"` → mark task as `[RESUMED-DONE]` (skip entirely)
      - If `current_phase` is `"failed"` → mark task as `[RESUMED-RETRY]` (restart from the failed phase)
      - If `current_phase` is a phase name (in-progress when interrupted) → mark as `[RESUMED-CONTINUE]` (restart from this phase)
    - If `status.json` does not exist → treat as a fresh task (not started yet)
 
-4. Print resume summary:
+6. Print resume summary:
    ```
    Resuming run from {started_at}
 
@@ -189,7 +194,7 @@ If `resume_mode` is `true`:
    - Task 4 (Add tests): NOT STARTED
    ```
 
-5. Store the resume state for each task. Step 6 will use this to skip completed tasks and start from the correct phase.
+7. Store the resume state for each task. Step 6 will use this to skip completed tasks and start from the correct phase.
 
 ## Step 1.5: Resolve Dependencies
 
@@ -451,7 +456,7 @@ Execute waves sequentially. For each wave, spawn all its tasks in parallel (up t
 
 **Resume handling:** When `resume_mode` is `true`, apply these rules before spawning each task:
 - `[RESUMED-DONE]` tasks: Skip entirely — do not spawn a worker. Use `TaskUpdate` to mark as `completed` immediately. Log: `[{HH:MM:SS}] Task {N} ({title}): skipped (completed in previous run)`
-- `[RESUMED-RETRY]` tasks: Spawn the worker starting from the **failed phase** (not the first phase). Set `PHASE` to the failed phase name. Include all `PREVIOUS ARTIFACTS` from phases that completed before the failure. The worker's existing worktree branch should still exist — reuse it.
+- `[RESUMED-RETRY]` tasks: Spawn the worker starting from the **failed phase** (not the first phase). Set `PHASE` to the failed phase name. Include all `PREVIOUS ARTIFACTS` from phases that completed before the failure. Read these from `.minion/{task_slug}/{phase_name}.md` — the artifact files from the previous run are still on disk. The worker's existing worktree branch should still exist — reuse it.
 - `[RESUMED-CONTINUE]` tasks: Same as RETRY — spawn from the interrupted phase. The in-progress phase had no result, so treat it as if it hasn't started.
 - Fresh tasks (no status.json): Spawn normally from the first phase.
 
