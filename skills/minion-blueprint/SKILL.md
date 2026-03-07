@@ -40,6 +40,11 @@ If `PREVIOUS ARTIFACTS` lists any artifact files, read them first — they conta
 
 Implement the task. Follow all rules from CLAUDE.md and project conventions. Write clean, minimal code. Do not over-engineer.
 
+**Escalation check (before writing code):** After gathering context (Step 2), evaluate whether the task can be implemented:
+- If the task description is ambiguous or missing critical information → STOP. Skip to Step 9 and report `STATUS: needs_clarification` with a numbered list of questions.
+- If a required file, API, or dependency doesn't exist and can't be created as part of this task → STOP. Skip to Step 9 and report `STATUS: blocked` with the specific blocker.
+Do NOT guess when information is missing. A `needs_clarification` report is better than incorrect code.
+
 If the task includes test requirements, write the tests as part of implementation.
 
 **Phase boundary rule:** If a `PHASE` field was provided, scope your work strictly to that phase:
@@ -138,7 +143,7 @@ MINION REPORT
 Task: {task-title}
 Phase: {phase-name, or "implement" if not provided}
 Branch: {branch-name}
-Status: {success | lint_failed | test_failed | implementation_failed | partial}
+Status: {success | lint_failed | test_failed | implementation_failed | partial | needs_clarification | blocked | stuck}
 Artifact: {artifact file path written, or "none"}
 Files changed: {count}
 Summary: {1-2 sentence description of what was done}
