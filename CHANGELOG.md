@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.6.0] - 2026-03-07
+
+### Added
+- Phase B — cyclic workflows (review-fix loop) (#21) (`d9b0f26`)
+
+### Other
+- v1.5.1 — update changelog and version (#22) (`49d805c`)
+
 ## [1.5.1] - 2026-03-07
 
 ### Fixed
