@@ -158,6 +158,17 @@ Workflows define the phase sequence for task execution. Use `--workflow` to sele
 /minion --workflow quick tasks.md
 ```
 
+### Resuming Interrupted Runs
+
+If a run is interrupted (context limit, crash, or manual abort), resume where you left off:
+
+```bash
+# Resume the last run — skips completed tasks, retries failures
+/minion --resume tasks.md
+```
+
+The orchestrator reads `.minion/status.json` files from the previous run to determine which tasks completed, which failed, and which were interrupted mid-phase.
+
 ### Custom Workflows
 
 Create `.md` files in `~/.claude/workflows/` or `{project}/.claude/workflows/`:
