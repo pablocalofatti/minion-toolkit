@@ -34,11 +34,34 @@ Where `{task-slug}` is the task title converted to kebab-case, max 50 chars.
 
 Read the files listed in the task's context files section. If no files are listed, use codegraph_context or Grep to find relevant code. Do NOT start implementing until you understand the existing patterns.
 
+If `PREVIOUS ARTIFACTS` lists any artifact files, read them first — they contain context and decisions from prior workflow phases that should guide your implementation.
+
 ### Step 3: Implement [AGENTIC — max 25 turns]
 
 Implement the task. Follow all rules from CLAUDE.md and project conventions. Write clean, minimal code. Do not over-engineer.
 
 If the task includes test requirements, write the tests as part of implementation.
+
+### Step 3.5: Write Phase Artifact [DETERMINISTIC]
+
+If `ARTIFACT PATH` was provided in the task input, write a brief markdown file summarizing your work:
+
+```markdown
+# {Phase Name}: {Task Title}
+
+## Approach
+- {2-3 bullet points describing what you did and why}
+
+## Files Changed
+- {list each file created or modified with a one-line description}
+
+## Decisions
+- {any notable design decisions or trade-offs made}
+```
+
+Write this file to the exact path specified in `ARTIFACT PATH`.
+
+If `ARTIFACT PATH` was not provided (v1 mode), skip this step.
 
 ### Step 4: Lint [DETERMINISTIC]
 
@@ -105,15 +128,11 @@ Report format:
 ```
 MINION REPORT
 Task: {task-title}
+Phase: {phase-name, or "implement" if not provided}
 Branch: {branch-name}
 Status: {success | lint_failed | test_failed | implementation_failed | partial}
-  - success: all steps passed, task fully implemented
-  - lint_failed: implementation done but lint could not be fixed
-  - test_failed: implementation done but tests could not be fixed
-  - implementation_failed: could not implement (command not found, blocker, etc.)
-  - partial: implementation started but hit maxTurns before completing
+Artifact: {artifact file path written, or "none"}
 Files changed: {count}
-Out-of-scope files: {files modified outside the task's Files: declaration, or "none"}
 Summary: {1-2 sentence description of what was done}
 Errors: {if any, brief description of what failed}
 ```
