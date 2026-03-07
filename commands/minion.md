@@ -562,6 +562,7 @@ When creating or updating `.minion/{task_slug}/status.json`, write the full JSON
       "status": "completed | in_progress | pending | skipped",
       "agent": "{agent_name}",
       "artifact": "{artifact_path or null}",
+      "cycle_count": "{integer, only present on cycle target phases, default 0}",
       "started_at": "{ISO timestamp or null}",
       "completed_at": "{ISO timestamp or null}"
     }
@@ -572,6 +573,8 @@ When creating or updating `.minion/{task_slug}/status.json`, write the full JSON
 ```
 
 Initialize `status.json` when the first phase starts (Step 6 — set all phases to `pending`, first phase to `in_progress`). Update it on each phase completion (this step).
+
+For cycle target phases, initialize `cycle_count` to `0`. Increment it each time the cycle resets (Case C in Step 7). Non-cycle phases do not have a `cycle_count` field.
 
 ## Step 8: Present Summary
 
