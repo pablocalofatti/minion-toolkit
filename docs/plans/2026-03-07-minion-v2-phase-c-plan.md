@@ -184,7 +184,7 @@ Find step 3 in the "For each worker report:" section (the one that updates `stat
    After updating `status.json` (step 3) and before the pre-hook check (step 3.5):
 
    - Check if the **completed** phase has a `Post-hook` value (from Step 1.3)
-   - If yes AND the worker's `STATUS` was `success` (or `review_failed` for cycle target phases — post-hook only runs on `success`):
+   - If yes AND the worker's `STATUS` was `success`:
      - Resolve template variables in the hook command: replace `{task}` with the task title, `{task_slug}` with the slug, `{task_number}` with N, `{phase}` with the completed phase name
      - Run the resolved command using the `Bash` tool in the task's worktree directory
      - **If the command exits with code 0:** Continue to step 3.5 and phase progression as normal
