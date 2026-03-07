@@ -684,6 +684,27 @@ Below the table, show:
 - **Branches ready for review:** list the branch names of successful tasks
 - **Failed branches (preserved):** list failed branch names — these are starting points for manual fixes or retry
 
+### Write Learnings
+
+After presenting the summary table, append a learnings entry to `.minion/learnings.md`:
+
+````
+## Run {YYYY-MM-DD HH:MM}
+
+**Tasks:** {N} total, {succeeded} succeeded, {failed} failed
+
+**Failures:**
+{For each failed task: "- Task {N} ({title}): {status} — {error summary from report}"}
+
+**Patterns:**
+{For each task that required lint/test fixes: "- Task {N}: {brief description of what was fixed}"}
+````
+
+Rules:
+- Create `.minion/learnings.md` if it doesn't exist
+- If the file exceeds 100 lines after appending, remove the oldest `## Run` section(s) until it's under 100 lines
+- Only write entries that contain useful information — skip the learnings step if all tasks succeeded with no lint/test fixes (nothing to learn from)
+
 ## Step 9: Create PRs and Enable Auto-Merge
 
 Automatically create pull requests for all **successful** tasks and enable auto-merge. The orchestrator then monitors the pipeline in Step 9.5.

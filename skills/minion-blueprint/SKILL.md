@@ -36,6 +36,8 @@ Read the files listed in the task's context files section. If no files are liste
 
 If `PREVIOUS ARTIFACTS` lists any artifact files, read them first — they contain context and decisions from prior workflow phases that should guide your implementation.
 
+If a file `.minion/learnings.md` exists in the project root, read it. This file contains patterns and fixes from previous minion runs — apply any relevant lessons to avoid repeating past mistakes (e.g., correct import paths, naming conventions, known gotchas).
+
 ### Step 3: Implement [AGENTIC — max 25 turns]
 
 Implement the task. Follow all rules from CLAUDE.md and project conventions. Write clean, minimal code. Do not over-engineer.
