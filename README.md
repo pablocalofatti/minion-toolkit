@@ -143,6 +143,7 @@ Workflows define the phase sequence for task execution. Use `--workflow` to sele
 | `tdd` | plan → implement → review | Test-driven development |
 | `quick` | implement | Fast prototyping, no review |
 | `full-pipeline` | plan → implement → review ⇄ fix | Maximum quality with review-fix cycle (up to 3 iterations) |
+| `ci-checked` | implement → review | With CI hooks: tests after implement, lint before review |
 
 ### Workflow Usage
 
