@@ -102,6 +102,8 @@ Read the workflow file and extract:
 - **Command** — nested block under `- Command:` with `canonical:` and optional platform overrides (e.g., `claude-code:`, `opencode:`, `codex:`)
 - **Cycle** — value after `- Cycle:` (phase name to jump back to after this phase completes successfully, or `null` if not set)
 - **Max-cycles** — value after `- Max-cycles:` (integer, defaults to `3` if `Cycle` is set, ignored if `Cycle` is not set)
+- **Pre-hook** — value after `- Pre-hook:` (shell command to run before this phase starts, or `null` if not set). Template variables `{task}`, `{task_slug}`, `{task_number}`, `{phase}` are resolved before execution.
+- **Post-hook** — value after `- Post-hook:` (shell command to run after this phase completes successfully, or `null` if not set). Same template variables as Pre-hook.
 
 Store phases as an **ordered list** — phase execution follows document order.
 
@@ -460,6 +462,13 @@ ERRORS: {error details if status is not success, or "none"}
 
 The worker MUST create and work on the specified `BRANCH NAME`. Do not allow workers to deviate from the assigned branch name.
 
+**Pre-hook check (first phase):**
+
+Before spawning the worker for the first phase of each task, check if that phase has a `Pre-hook` value:
+- If yes: resolve template variables (`{task}`, `{task_slug}`, `{task_number}`, `{phase}`) and run the command using `Bash` in the project root directory (worktree is not yet created for the first spawn).
+- If the command exits non-zero: mark the task as `failed` immediately using `TaskUpdate`, log `[{HH:MM:SS}] Task {N} ({title}): {phase} pre-hook FAILED`, print the progress table, and do NOT spawn the worker. Move to the next task in the queue.
+- If the command exits with code 0: proceed to spawn the worker as normal.
+
 - Use `TaskUpdate` to mark each spawned task as `in_progress` and set `owner` to the worker name.
 
 **Queuing:** If there are more tasks than max parallel workers, keep the remaining tasks in a queue. When a worker completes (reports via SendMessage), spawn the next queued task on a new worker.
@@ -485,11 +494,73 @@ ERRORS: {error details if status is not success, or "none"}
 ```
 
 For each worker report:
+
+   **Progress output** — immediately after receiving a report, print:
+
+   a. A timestamped progress line:
+   ```
+   [{HH:MM:SS}] Task {N} ({title}): {phase} -> {STATUS}
+   ```
+
+   b. If spawning the next phase, also print:
+   ```
+   [{HH:MM:SS}] Task {N} ({title}): {next_phase} -> in_progress
+   ```
+
+   c. A compact summary table showing ALL tasks and their current phase status:
+   ```
+   +---------------------+------+-----------+--------+-----+
+   | Task                | plan | implement | review | fix |
+   +---------------------+------+-----------+--------+-----+
+   | 1. Add validation   |  v   |    o      |   .    |  .  |
+   | 2. Fix pagination   |  o   |    .      |   .    |  .  |
+   | 3. Add tests        |  o   |    .      |   .    |  .  |
+   +---------------------+------+-----------+--------+-----+
+   ```
+
+   **Status symbols:** `v` = completed, `o` = in_progress, `x` = failed, `>` = skipped, `.` = pending
+
+   The table columns are the workflow phases (from Step 1.3). For the `default` workflow, show a single `implement` column. Print this table after EVERY state change — it gives the user a real-time dashboard.
+
 1. Parse the structured report — extract `TASK`, `PHASE`, `STATUS`, `BRANCH`, `ARTIFACT`, `FILES CHANGED`, `OUT-OF-SCOPE FILES`, `SUMMARY`, and `ERRORS`
 2. If the report is malformed or missing fields, log a warning but extract what you can
 3. Update `.minion/{task_slug}/status.json`:
    - Mark the completed phase's status as `completed` with timestamp
    - If `STATUS` is not `success`, mark remaining phases as `skipped`
+
+3.25. **Post-hook check (after phase completes successfully):**
+
+   After updating `status.json` and before the pre-hook check:
+
+   - Check if the **completed** phase has a `Post-hook` value (from Step 1.3)
+   - If yes AND the worker's `STATUS` was `success`:
+     - Resolve template variables in the hook command: replace `{task}` with the task title, `{task_slug}` with the slug, `{task_number}` with N, `{phase}` with the completed phase name
+     - Run the resolved command using the `Bash` tool in the task's worktree directory
+     - **If the command exits with code 0:** Continue to step 3.5 and phase progression as normal
+     - **If the command exits with non-zero code:**
+       - Log: `[{HH:MM:SS}] Task {N} ({title}): {phase} post-hook FAILED (exit code {code})`
+       - Override the phase status to `failed` in `status.json` (even though the worker succeeded)
+       - Mark all remaining phases as `skipped`
+       - Use `TaskUpdate` to mark the task as `completed`
+       - Do NOT proceed to the next phase — skip to the next report
+       - Print the progress table showing the updated state
+
+3.5. **Pre-hook check (before spawning next phase):**
+
+   This step applies every time the orchestrator is about to spawn a worker for a new phase (in Cases B, C, and D below). Before calling the `Agent` tool to spawn the worker:
+
+   - Check if the target phase has a `Pre-hook` value (from Step 1.3)
+   - If yes:
+     - Resolve template variables in the hook command: replace `{task}` with the task title, `{task_slug}` with the slug, `{task_number}` with N, `{phase}` with the target phase name
+     - Run the resolved command using the `Bash` tool in the task's worktree directory
+     - **If the command exits with code 0:** Proceed to spawn the worker as normal
+     - **If the command exits with non-zero code:**
+       - Log: `[{HH:MM:SS}] Task {N} ({title}): {phase} pre-hook FAILED (exit code {code})`
+       - Mark the phase as `failed` in `status.json`
+       - Mark all remaining phases as `skipped`
+       - Use `TaskUpdate` to mark the task as `completed`
+       - Do NOT spawn the worker — skip to the next report
+       - Print the progress table showing the updated state
 
 4. **Phase progression check:**
    - Look up the task's workflow phases (ordered list from Step 1.3)
