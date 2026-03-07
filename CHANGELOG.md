@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.7.0] - 2026-03-07
+
+### Added
+- Phase C — progress output and phase hooks (#24) (`03919f6`)
+
+### Other
+- v1.6.0 — update changelog and version (#23) (`f7a1835`)
+
 ## [1.6.0] - 2026-03-07
 
 ### Added
