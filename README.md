@@ -139,8 +139,8 @@ Workflows define the phase sequence for task execution. Use `--workflow` to sele
 
 | Workflow | Phases | Use Case |
 |----------|--------|----------|
-| `default` | implement → review | Standard development (v1 behavior) |
-| `tdd` | plan → implement → review | Test-driven development |
+| `default` | implement → review | Lightweight — skip planning, just build and review |
+| `tdd` | plan → implement → review | **Default** — plan first, then TDD, then review |
 | `quick` | implement | Fast prototyping, no review |
 | `full-pipeline` | plan → implement → review ⇄ fix | Maximum quality with review-fix cycle (up to 3 iterations) |
 | `ci-checked` | implement → review | With CI hooks: tests after implement, lint before review |
@@ -148,13 +148,13 @@ Workflows define the phase sequence for task execution. Use `--workflow` to sele
 ### Workflow Usage
 
 ```bash
-# Use TDD workflow
-/minion --workflow tdd tasks.md
-
-# Default workflow (same as v1)
+# Default: TDD workflow (plan → implement → review)
 /minion tasks.md
 
-# Quick prototyping
+# Lightweight: skip planning (v1 behavior)
+/minion --workflow default tasks.md
+
+# Quick prototyping (implement only, no review)
 /minion --workflow quick tasks.md
 ```
 

@@ -15,7 +15,7 @@ The user's input is in `$ARGUMENTS`.
 - **Parse workflow flag:** Check if `$ARGUMENTS` contains `--workflow {name}`. If present, extract `{name}` as the workflow name and remove the `--workflow {name}` portion from arguments before parsing the task file path. Store the workflow name.
 - **Parse platform flag:** Check if `$ARGUMENTS` contains `--platform {name}`. If present, extract `{name}` as the platform override and remove it from arguments. Store the platform name.
 - **Parse resume flag:** Check if `$ARGUMENTS` contains `--resume`. If present, set `resume_mode = true` and remove `--resume` from arguments. Default: `resume_mode = false`.
-- If no `--workflow` flag, set workflow name to `default`.
+- If no `--workflow` flag, set workflow name to `tdd`.
 - If `$ARGUMENTS` (after flag removal) contains a file path (e.g., `tasks.md`, `speckit/tasks.md`), read that file.
 - If `$ARGUMENTS` is empty after flag removal, look for `speckit/tasks.md` in the current project working directory.
 - If the file is not found, tell the user and show the expected format (see below).
