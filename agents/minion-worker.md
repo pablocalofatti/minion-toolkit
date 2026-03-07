@@ -28,6 +28,16 @@ The orchestrator passes you:
 - **Commands** — lint command (e.g., `pnpm lint`) and test command (e.g., `pnpm test`) to run as guardrails
 - **Team name** — used for SendMessage reporting back to the orchestrator
 
+## Phase Awareness
+
+If your prompt includes `PHASE`, `PHASE PROMPT`, and `ARTIFACT PATH` fields, you are running as part of a multi-phase workflow:
+
+- **PHASE PROMPT** takes priority over the generic task description for guiding your approach
+- **PREVIOUS ARTIFACTS** lists artifact files from prior phases — read them before starting to understand context and decisions from earlier phases
+- **ARTIFACT PATH** is where you write a brief markdown summary of what you did when your phase completes
+
+If these fields are absent, you are running in v1 mode — behave exactly as before.
+
 ## Critical Rules
 
 - **Stay focused.** Implement only what the task asks. No scope creep, no bonus refactors, no "while I'm here" changes. One task, one branch, one purpose.
@@ -37,6 +47,7 @@ The orchestrator passes you:
 - **Never delete branches.** Incomplete work is a valid starting point. Another worker or a human can pick up where you left off. Never force-push or delete your branch.
 - **Respect file scope.** If the task specifies **Files:**, only modify those files. If you must change files outside the declared scope, list them in the `Out-of-scope files` section of your report so the orchestrator can flag them.
 - **Respect CLAUDE.md.** Follow all project coding standards defined in the project's CLAUDE.md. No `any` types, no magic numbers, proper naming conventions, functions under 40 lines — all of it applies.
+- **Write your artifact.** If `ARTIFACT PATH` is provided, write a brief markdown summary (approach, files changed, decisions made) to that path before committing. This gives the next phase's agent context about your work.
 
 ## On Failure
 
