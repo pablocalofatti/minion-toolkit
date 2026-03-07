@@ -462,6 +462,13 @@ ERRORS: {error details if status is not success, or "none"}
 
 The worker MUST create and work on the specified `BRANCH NAME`. Do not allow workers to deviate from the assigned branch name.
 
+**Pre-hook check (first phase):**
+
+Before spawning the worker for the first phase of each task, check if that phase has a `Pre-hook` value:
+- If yes: resolve template variables (`{task}`, `{task_slug}`, `{task_number}`, `{phase}`) and run the command using `Bash` in the project root directory (worktree is not yet created for the first spawn).
+- If the command exits non-zero: mark the task as `failed` immediately using `TaskUpdate`, log `[{HH:MM:SS}] Task {N} ({title}): {phase} pre-hook FAILED`, print the progress table, and do NOT spawn the worker. Move to the next task in the queue.
+- If the command exits with code 0: proceed to spawn the worker as normal.
+
 - Use `TaskUpdate` to mark each spawned task as `in_progress` and set `owner` to the worker name.
 
 **Queuing:** If there are more tasks than max parallel workers, keep the remaining tasks in a queue. When a worker completes (reports via SendMessage), spawn the next queued task on a new worker.
