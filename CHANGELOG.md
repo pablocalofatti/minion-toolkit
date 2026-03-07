@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.8.0] - 2026-03-07
+
+### Added
+- Phase D Tier 1 — Worker Intelligence (#26) (`0f2fc57`)
+
+### Other
+- v1.7.0 — update changelog and version (#25) (`8980c6f`)
+
 ## [1.7.0] - 2026-03-07
 
 ### Added
