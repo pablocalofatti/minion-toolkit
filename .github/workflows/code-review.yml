@@ -47,8 +47,12 @@ jobs:
             Use `gh pr diff ${{ github.event.pull_request.number }}` to see the diff.
             Focus exclusively on the lines that changed.
 
-            ## Anti-Hallucination Rule
-            ONLY comment on code that appears verbatim in the diff output. Before posting any issue, quote the exact line from the diff. If you cannot quote it verbatim, DO NOT comment on it — it may not exist. Never infer, reconstruct, or imagine code that is not in the diff.
+            ## Anti-Hallucination Rules
+            1. **Quote before commenting.** For EVERY issue you report, first extract the exact line from the diff output as a direct quote. If you cannot produce a verbatim quote, DO NOT comment — the code may not exist.
+            2. **Only use the diff as your source.** Do not use general knowledge about what code "should" look like. Base every claim exclusively on the diff output from `gh pr diff`.
+            3. **Verify after drafting.** After drafting each comment, re-check: does the quoted code actually appear in the diff? If you cannot find the supporting quote, retract the comment.
+            4. **Say "I'm not sure" when uncertain.** If you're unsure whether something is an issue or if you lack context, say so explicitly rather than guessing. It is better to skip a comment than to fabricate one.
+            5. **Never infer, reconstruct, or imagine code** that is not in the diff. Do not combine fragments from different files into a pattern that doesn't exist.
 
             ## Standards Checklist
             Check EVERY changed line against these rules (ordered by severity):
