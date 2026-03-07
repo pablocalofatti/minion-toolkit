@@ -14,7 +14,8 @@ The user's input is in `$ARGUMENTS`.
 
 - **Parse workflow flag:** Check if `$ARGUMENTS` contains `--workflow {name}`. If present, extract `{name}` as the workflow name and remove the `--workflow {name}` portion from arguments before parsing the task file path. Store the workflow name.
 - **Parse platform flag:** Check if `$ARGUMENTS` contains `--platform {name}`. If present, extract `{name}` as the platform override and remove it from arguments. Store the platform name.
-- If no `--workflow` flag, set workflow name to `default`.
+- **Parse resume flag:** Check if `$ARGUMENTS` contains `--resume`. If present, set `resume_mode = true` and remove `--resume` from arguments. Default: `resume_mode = false`.
+- If no `--workflow` flag, set workflow name to `tdd`.
 - If `$ARGUMENTS` (after flag removal) contains a file path (e.g., `tasks.md`, `speckit/tasks.md`), read that file.
 - If `$ARGUMENTS` is empty after flag removal, look for `speckit/tasks.md` in the current project working directory.
 - If the file is not found, tell the user and show the expected format (see below).
@@ -159,6 +160,41 @@ If any error is found, report it and stop. Warnings are displayed but execution 
 ```
 
 Note: `waves` and `max_parallel` fields are populated after Step 1.5 and Step 3 respectively. Initialize them as empty/null and update later.
+
+## Step 1.4: Resume Detection
+
+**Skip this step entirely if `resume_mode` is `false`.**
+
+If `resume_mode` is `true`:
+
+1. Check for `.minion/run.json` in the project root. If not found, warn: "No previous run found — starting fresh." Set `resume_mode = false` and continue normally.
+
+2. Read `.minion/run.json` and extract the previous run's `workflow`, `tasks`, and `started_at`. If `.minion/run.json` exists but cannot be parsed as valid JSON, warn: "Previous run state is corrupted — starting fresh." Set `resume_mode = false` and continue normally.
+
+3. **Workflow compatibility check:** Compare the current workflow name with the previous run's `workflow` field. If they differ, warn: "Workflow changed from {previous} to {current}. Resume may produce unexpected results if phase names differ." Ask the user whether to continue or abort.
+
+4. **Task list validation:** Compare the current task count and titles with the previous run. If the number of tasks differs or any task title changed, warn: "Task list has changed since the previous run." List the differences. Resume matches tasks by `task_slug` (derived from title), not by task number — so reordered tasks will still match correctly. New tasks without a status.json are treated as fresh. Tasks that existed in the previous run but are no longer in the task file are ignored.
+
+5. For each task from Step 1, check for `.minion/{task_slug}/status.json`:
+   - If `status.json` exists but is invalid JSON, treat that task as a fresh task (not started) and warn: "Corrupt status for task {N} ({title}) — will re-run from scratch."
+   - If `status.json` exists and is valid, read it and determine the task's current state:
+     - If `current_phase` is `"completed"` → mark task as `[RESUMED-DONE]` (skip entirely)
+     - If `current_phase` is `"failed"` → mark task as `[RESUMED-RETRY]` (restart from the failed phase)
+     - If `current_phase` is a phase name (in-progress when interrupted) → mark as `[RESUMED-CONTINUE]` (restart from this phase)
+   - If `status.json` does not exist → treat as a fresh task (not started yet)
+
+6. Print resume summary:
+   ```
+   Resuming run from {started_at}
+
+   Task resume status:
+   - Task 1 (Add validation): DONE — skipping
+   - Task 2 (Fix pagination): RETRY from review (failed)
+   - Task 3 (Add search): CONTINUE from implement (interrupted)
+   - Task 4 (Add tests): NOT STARTED
+   ```
+
+7. Store the resume state for each task. Step 6 will use this to skip completed tasks and start from the correct phase.
 
 ## Step 1.5: Resolve Dependencies
 
@@ -367,6 +403,11 @@ Display:
   3. Update config files         → minion-worker (default)
   ```
   Mark auto-detected assignments with "(auto-detected)" and explicit ones without annotation. Default fallback shown as "(default)".
+- **Resume mode:** _(only shown when `resume_mode` is `true`)_
+  - Previously completed: N tasks (will be skipped)
+  - Retrying from failure: N tasks
+  - Continuing interrupted: N tasks
+  - Fresh (not started): N tasks
 - **Tasks skipped:** count of `[DONE]`/`[SKIP]` tasks, if any
 - **Execution waves:** show wave breakdown if dependencies exist (e.g., "Wave 1: Tasks 1, 2 | Wave 2: Tasks 3, 4")
 - **Critical path:** the longest dependency chain (e.g., "Task 1 → Task 3 → Task 5")
@@ -412,6 +453,14 @@ This creates the shared task list that workers and the orchestrator use to track
 **If Wave 0 (bootstrap) was created in Step 2.5:** spawn it first as a single worker before any user tasks. Wait for its completion and report back before proceeding to spawn user task workers. If Wave 0 fails, warn the user — the quality guardrails will be absent — and ask whether to continue or abort.
 
 Execute waves sequentially. For each wave, spawn all its tasks in parallel (up to max parallel workers). Wait for the wave to complete before starting the next wave.
+
+**Resume handling:** When `resume_mode` is `true`, apply these rules before spawning each task:
+- `[RESUMED-DONE]` tasks: Skip entirely — do not spawn a worker. Use `TaskUpdate` to mark as `completed` immediately. Log: `[{HH:MM:SS}] Task {N} ({title}): skipped (completed in previous run)`
+- `[RESUMED-RETRY]` tasks: Spawn the worker starting from the **failed phase** (not the first phase). Set `PHASE` to the failed phase name. Include all `PREVIOUS ARTIFACTS` from phases that completed before the failure. Read these from `.minion/{task_slug}/{phase_name}.md` — the artifact files from the previous run are still on disk. The worker's existing worktree branch should still exist — reuse it.
+- `[RESUMED-CONTINUE]` tasks: Same as RETRY — spawn from the interrupted phase. The in-progress phase had no result, so treat it as if it hasn't started.
+- Fresh tasks (no status.json): Spawn normally from the first phase.
+
+**Worktree reuse on resume:** When resuming, check if the task's branch (`minion/task-{N}-{slug}`) already exists locally. If yes, reuse the existing worktree instead of creating a new one. If the branch exists but the worktree directory is gone (cleaned up), recreate the worktree from the existing branch: `git worktree add {path} {branch-name}` (without `-b`).
 
 For each task in the current wave, up to the max parallel worker count, spawn a worker agent:
 

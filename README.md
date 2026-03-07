@@ -139,24 +139,36 @@ Workflows define the phase sequence for task execution. Use `--workflow` to sele
 
 | Workflow | Phases | Use Case |
 |----------|--------|----------|
-| `default` | implement → review | Standard development (v1 behavior) |
-| `tdd` | plan → implement → review | Test-driven development |
+| `default` | implement → review | Lightweight — skip planning, just build and review |
+| `tdd` | plan → implement → review | **Default** — plan first, then TDD, then review |
 | `quick` | implement | Fast prototyping, no review |
 | `full-pipeline` | plan → implement → review ⇄ fix | Maximum quality with review-fix cycle (up to 3 iterations) |
 | `ci-checked` | implement → review | With CI hooks: tests after implement, lint before review |
+| `secure` | plan → implement → security-review → review | Security audit before code review |
 
 ### Workflow Usage
 
 ```bash
-# Use TDD workflow
-/minion --workflow tdd tasks.md
-
-# Default workflow (same as v1)
+# Default: TDD workflow (plan → implement → review)
 /minion tasks.md
 
-# Quick prototyping
+# Lightweight: skip planning (v1 behavior)
+/minion --workflow default tasks.md
+
+# Quick prototyping (implement only, no review)
 /minion --workflow quick tasks.md
 ```
+
+### Resuming Interrupted Runs
+
+If a run is interrupted (context limit, crash, or manual abort), resume where you left off:
+
+```bash
+# Resume the last run — skips completed tasks, retries failures
+/minion --resume tasks.md
+```
+
+The orchestrator reads `.minion/status.json` files from the previous run to determine which tasks completed, which failed, and which were interrupted mid-phase.
 
 ### Custom Workflows
 
