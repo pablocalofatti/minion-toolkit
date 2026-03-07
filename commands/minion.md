@@ -102,6 +102,8 @@ Read the workflow file and extract:
 - **Command** — nested block under `- Command:` with `canonical:` and optional platform overrides (e.g., `claude-code:`, `opencode:`, `codex:`)
 - **Cycle** — value after `- Cycle:` (phase name to jump back to after this phase completes successfully, or `null` if not set)
 - **Max-cycles** — value after `- Max-cycles:` (integer, defaults to `3` if `Cycle` is set, ignored if `Cycle` is not set)
+- **Pre-hook** — value after `- Pre-hook:` (shell command to run before this phase starts, or `null` if not set). Template variables `{task}`, `{task_slug}`, `{task_number}`, `{phase}` are resolved before execution.
+- **Post-hook** — value after `- Post-hook:` (shell command to run after this phase completes successfully, or `null` if not set). Same template variables as Pre-hook.
 
 Store phases as an **ordered list** — phase execution follows document order.
 
