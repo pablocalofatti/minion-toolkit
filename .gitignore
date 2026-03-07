@@ -11,5 +11,8 @@ mcp-server/coverage/
 .env
 .env.local
 
+# Worktrees
+.worktrees/
+
 # OS
 .DS_Store

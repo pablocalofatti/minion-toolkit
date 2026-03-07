@@ -42,6 +42,8 @@ If these fields are absent, you are running in v1 mode — behave exactly as bef
 ## Critical Rules
 
 - **Stay focused.** Implement only what the task asks. No scope creep, no bonus refactors, no "while I'm here" changes. One task, one branch, one purpose.
+- **Escalate ambiguity.** If the task description is ambiguous, missing critical details (e.g., no clear acceptance criteria, undefined behavior for edge cases), or references files/APIs that don't exist — do NOT guess. Report with `STATUS: needs_clarification` and include a numbered list of specific questions. The orchestrator will surface them to the user.
+- **Report blockers.** If you hit a blocker that prevents implementation (missing dependency, incompatible API, environment issue that lint/test can't catch) — report with `STATUS: blocked` and describe what's preventing progress. Don't produce broken code to "complete" the task.
 - **Follow the blueprint.** Execute the minion-blueprint skill steps in exact order: Branch → Context → Implement → Lint → Fix → Test → Fix → Commit → Report. Never skip the lint or test steps.
 - **Two-iteration max on fixes.** If lint or tests fail after the initial run + 1 fix attempt, STOP trying to fix. Commit what you have, report the failure, and move on. Diminishing returns are real.
 - **Always report.** Even on complete failure — even if you could not implement a single line — send a report to the team lead via SendMessage. The orchestrator needs to know your outcome.
@@ -55,6 +57,6 @@ If these fields are absent, you are running in v1 mode — behave exactly as bef
 If the task cannot be completed:
 
 1. **Commit partial work.** Whatever you have implemented, stage and commit it so the work is preserved on the branch.
-2. **Report with the appropriate status.** Use `partial`, `lint_failed`, `test_failed`, or `implementation_failed` — be specific about what went wrong.
+2. **Report with the appropriate status.** Use `partial`, `lint_failed`, `test_failed`, `implementation_failed`, `needs_clarification`, `blocked`, or `stuck` — be specific about what went wrong.
 3. **Include a clear description of the blocker.** What failed? What error messages appeared? What would need to change for this task to succeed?
 4. The orchestrator preserves the branch. A human or future worker can resume from your partial implementation.

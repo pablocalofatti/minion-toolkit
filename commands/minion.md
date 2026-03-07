@@ -450,7 +450,7 @@ IMPORTANT — When you finish, send your results via SendMessage using this exac
 --- MINION REPORT ---
 TASK: {N}
 PHASE: {phase name, or "implement" if not in a multi-phase workflow}
-STATUS: {success | partial | lint_failed | test_failed | implementation_failed | review_failed}
+STATUS: {success | partial | lint_failed | test_failed | implementation_failed | review_failed | needs_clarification | blocked | stuck}
 BRANCH: {your branch name}
 ARTIFACT: {path to artifact file written, or "none"}
 FILES CHANGED: {comma-separated list of files created or modified}
@@ -483,7 +483,7 @@ Wait for worker reports. Workers send results via `SendMessage` when they comple
 --- MINION REPORT ---
 TASK: {N}
 PHASE: {phase name, or "implement" if not in a multi-phase workflow}
-STATUS: {success | partial | lint_failed | test_failed | implementation_failed | review_failed}
+STATUS: {success | partial | lint_failed | test_failed | implementation_failed | review_failed | needs_clarification | blocked | stuck}
 BRANCH: {exact branch name, e.g. minion/task-1-add-user-validation}
 ARTIFACT: {path to artifact file written, or "none"}
 FILES CHANGED: {comma-separated list of files created or modified}
@@ -518,12 +518,31 @@ For each worker report:
    +---------------------+------+-----------+--------+-----+
    ```
 
-   **Status symbols:** `v` = completed, `o` = in_progress, `x` = failed, `>` = skipped, `.` = pending
+   **Status symbols:** `v` = completed, `o` = in_progress, `x` = failed, `!` = stuck/blocked, `?` = needs_clarification, `>` = skipped, `.` = pending
 
    The table columns are the workflow phases (from Step 1.3). For the `default` workflow, show a single `implement` column. Print this table after EVERY state change — it gives the user a real-time dashboard.
 
 1. Parse the structured report — extract `TASK`, `PHASE`, `STATUS`, `BRANCH`, `ARTIFACT`, `FILES CHANGED`, `OUT-OF-SCOPE FILES`, `SUMMARY`, and `ERRORS`
 2. If the report is malformed or missing fields, log a warning but extract what you can
+2.5. **Escalation check:**
+   - If `STATUS` is `needs_clarification`:
+     - Log: `[{HH:MM:SS}] Task {N} ({title}): {phase} -> NEEDS CLARIFICATION`
+     - Print the worker's ERRORS field (which contains the questions) prominently
+     - Mark the phase as `needs_clarification` in `status.json`
+     - Mark all remaining phases as `skipped`
+     - Use `TaskUpdate` to mark the task as `completed`
+     - Print the progress table (showing `?` for this phase)
+     - Skip to the next report — do NOT proceed to phase progression
+   - If `STATUS` is `blocked`:
+     - Log: `[{HH:MM:SS}] Task {N} ({title}): {phase} -> BLOCKED`
+     - Print the worker's ERRORS field (the blocker description)
+     - Mark the phase as `blocked` in `status.json`
+     - Mark all remaining phases as `skipped`
+     - Use `TaskUpdate` to mark the task as `completed`
+     - Print the progress table (showing `!` for this phase)
+     - Skip to the next report
+   - If `STATUS` is `stuck`:
+     - Treat identically to `blocked` — log, print errors, mark `stuck` in status.json, skip remaining phases
 3. Update `.minion/{task_slug}/status.json`:
    - Mark the completed phase's status as `completed` with timestamp
    - If `STATUS` is not `success`, mark remaining phases as `skipped`
@@ -664,6 +683,27 @@ Below the table, show:
 - **Scope warnings:** list any tasks that modified files outside their declared scope
 - **Branches ready for review:** list the branch names of successful tasks
 - **Failed branches (preserved):** list failed branch names — these are starting points for manual fixes or retry
+
+### Write Learnings
+
+After presenting the summary table, append a learnings entry to `.minion/learnings.md`:
+
+````
+## Run {YYYY-MM-DD HH:MM}
+
+**Tasks:** {N} total, {succeeded} succeeded, {failed} failed
+
+**Failures:**
+{For each failed task: "- Task {N} ({title}): {status} — {error summary from report}"}
+
+**Patterns:**
+{For each task that required lint/test fixes: "- Task {N}: {brief description of what was fixed}"}
+````
+
+Rules:
+- Create `.minion/learnings.md` if it doesn't exist
+- If the file exceeds 100 lines after appending, remove the oldest `## Run` section(s) until it's under 100 lines
+- Only write entries that contain useful information — skip the learnings step if all tasks succeeded with no lint/test fixes (nothing to learn from)
 
 ## Step 9: Create PRs and Enable Auto-Merge
 

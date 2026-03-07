@@ -36,9 +36,16 @@ Read the files listed in the task's context files section. If no files are liste
 
 If `PREVIOUS ARTIFACTS` lists any artifact files, read them first — they contain context and decisions from prior workflow phases that should guide your implementation.
 
+If a file `.minion/learnings.md` exists in the project root, read it. This file contains patterns and fixes from previous minion runs — apply any relevant lessons to avoid repeating past mistakes (e.g., correct import paths, naming conventions, known gotchas).
+
 ### Step 3: Implement [AGENTIC — max 25 turns]
 
 Implement the task. Follow all rules from CLAUDE.md and project conventions. Write clean, minimal code. Do not over-engineer.
+
+**Escalation check (before writing code):** After gathering context (Step 2), evaluate whether the task can be implemented:
+- If the task description is ambiguous or missing critical information → STOP. Skip to Step 9 and report `STATUS: needs_clarification` with a numbered list of questions.
+- If a required file, API, or dependency doesn't exist and can't be created as part of this task → STOP. Skip to Step 9 and report `STATUS: blocked` with the specific blocker.
+Do NOT guess when information is missing. A `needs_clarification` report is better than incorrect code.
 
 If the task includes test requirements, write the tests as part of implementation.
 
@@ -89,9 +96,12 @@ Run the lint command provided in the task input:
 Fix the lint errors reported in Step 4. Then re-run the lint command.
 
 - **If lint passes:** Continue to Step 6.
-- **If lint fails again:** STOP fixing. Report failure. Continue to Step 8 with status=lint_failed.
+- **If lint fails again with a DIFFERENT error:** STOP fixing. Report failure. Continue to Step 8 with status=lint_failed.
+- **If lint fails again with the SAME error (same message, same file, same line):** STOP immediately. The error is unfixable in this context. Continue to Step 8 with status=stuck. Include the repeated error in your report.
 
 **TWO-ITERATION MAXIMUM:** You get 2 total attempts (the initial run + 1 fix cycle). Do not attempt further fixes. Diminishing returns.
+
+**Stuck detection:** Compare the error output from both attempts. If the core error message is identical (ignoring line number shifts of ±3 lines), report `stuck` instead of `lint_failed`. This signals to the orchestrator that retrying won't help.
 
 ### Step 6: Test [DETERMINISTIC]
 
@@ -111,9 +121,12 @@ Run the test command provided in the task input:
 Fix the test failures reported in Step 6. Then re-run the test command.
 
 - **If tests pass:** Continue to Step 8.
-- **If tests fail again:** STOP fixing. Report failure. Continue to Step 8 with status=test_failed.
+- **If tests fail again with a DIFFERENT error:** STOP fixing. Report failure. Continue to Step 8 with status=test_failed.
+- **If tests fail again with the SAME error (same test name, same assertion message):** STOP immediately. The error is unfixable in this context. Continue to Step 8 with status=stuck. Include the repeated error in your report.
 
 **TWO-ITERATION MAXIMUM:** You get 2 total attempts (the initial run + 1 fix cycle). Do not attempt further fixes. Diminishing returns.
+
+**Stuck detection:** Compare the failing test names and error messages from both attempts. If the same test fails with the same assertion error, report `stuck` instead of `test_failed`.
 
 ### Step 8: Commit [DETERMINISTIC]
 
@@ -138,7 +151,7 @@ MINION REPORT
 Task: {task-title}
 Phase: {phase-name, or "implement" if not provided}
 Branch: {branch-name}
-Status: {success | lint_failed | test_failed | implementation_failed | partial}
+Status: {success | lint_failed | test_failed | implementation_failed | partial | needs_clarification | blocked | stuck}
 Artifact: {artifact file path written, or "none"}
 Files changed: {count}
 Summary: {1-2 sentence description of what was done}
