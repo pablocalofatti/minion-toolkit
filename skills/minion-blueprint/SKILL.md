@@ -94,9 +94,12 @@ Run the lint command provided in the task input:
 Fix the lint errors reported in Step 4. Then re-run the lint command.
 
 - **If lint passes:** Continue to Step 6.
-- **If lint fails again:** STOP fixing. Report failure. Continue to Step 8 with status=lint_failed.
+- **If lint fails again with a DIFFERENT error:** STOP fixing. Report failure. Continue to Step 8 with status=lint_failed.
+- **If lint fails again with the SAME error (same message, same file, same line):** STOP immediately. The error is unfixable in this context. Continue to Step 8 with status=stuck. Include the repeated error in your report.
 
 **TWO-ITERATION MAXIMUM:** You get 2 total attempts (the initial run + 1 fix cycle). Do not attempt further fixes. Diminishing returns.
+
+**Stuck detection:** Compare the error output from both attempts. If the core error message is identical (ignoring line number shifts of ±3 lines), report `stuck` instead of `lint_failed`. This signals to the orchestrator that retrying won't help.
 
 ### Step 6: Test [DETERMINISTIC]
 
@@ -116,9 +119,12 @@ Run the test command provided in the task input:
 Fix the test failures reported in Step 6. Then re-run the test command.
 
 - **If tests pass:** Continue to Step 8.
-- **If tests fail again:** STOP fixing. Report failure. Continue to Step 8 with status=test_failed.
+- **If tests fail again with a DIFFERENT error:** STOP fixing. Report failure. Continue to Step 8 with status=test_failed.
+- **If tests fail again with the SAME error (same test name, same assertion message):** STOP immediately. The error is unfixable in this context. Continue to Step 8 with status=stuck. Include the repeated error in your report.
 
 **TWO-ITERATION MAXIMUM:** You get 2 total attempts (the initial run + 1 fix cycle). Do not attempt further fixes. Diminishing returns.
+
+**Stuck detection:** Compare the failing test names and error messages from both attempts. If the same test fails with the same assertion error, report `stuck` instead of `test_failed`.
 
 ### Step 8: Commit [DETERMINISTIC]
 
