@@ -132,6 +132,9 @@ Check the resolved workflow for errors:
 - All referenced agents exist in the agent registry (from Step 1.7) or match `default_agent` — warning: "Agent '{name}' not found, will use minion-worker"
 - All artifact paths contain `{task_slug}` placeholder — warning: "Artifact path missing {task_slug} — artifacts may overwrite across tasks"
 - All phases have a `Prompt` value — error: "Phase '{name}' has no Prompt"
+- Cycle target must exist and precede the declaring phase — error: "Cycle target '{name}' must appear before phase '{current}' in document order"
+- Only one phase may declare `Cycle` per workflow — error: "Only one cycle per workflow is supported. Phases '{first}' and '{second}' both declare Cycle"
+- `Max-cycles` without `Cycle` — warning: "Max-cycles ignored on phase '{name}' — no Cycle target defined"
 
 If any error is found, report it and stop. Warnings are displayed but execution continues.
 
