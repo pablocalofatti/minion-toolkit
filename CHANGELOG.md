@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.5.1] - 2026-03-07
+
+### Fixed
+- tighten phase boundary enforcement in worker and blueprint (#20) (`d59185e`)
+
+### Other
+- v1.5.0 — update changelog and version (#19) (`8cf84a3`)
+
 ## [1.5.0] - 2026-03-07
 
 ### Added
