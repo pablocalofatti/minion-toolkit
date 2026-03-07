@@ -1,7 +1,7 @@
 ---
 name: full-pipeline
-description: Enterprise pipeline — plan, implement, review, and auto-fix. Maximum quality guardrails.
-version: 1.0
+description: Enterprise pipeline with review-fix cycle. Maximum quality guardrails.
+version: 2.0
 default_agent: minion-worker
 platforms:
   - claude-code
@@ -42,5 +42,7 @@ platforms:
 - Artifact: .minion/{task_slug}/fix.md
 - Agent: minion-worker
 - Gate: artifact
+- Cycle: review
+- Max-cycles: 3
 - Command:
   - canonical: minion:fix
