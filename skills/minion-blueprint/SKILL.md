@@ -42,6 +42,14 @@ Implement the task. Follow all rules from CLAUDE.md and project conventions. Wri
 
 If the task includes test requirements, write the tests as part of implementation.
 
+**Phase boundary rule:** If a `PHASE` field was provided, scope your work strictly to that phase:
+- `plan` phase → Analyze, plan, write the artifact. Do NOT write source code or tests.
+- `implement` phase → Write source code and tests. Do NOT review or critique.
+- `review` phase → Review code quality. Do NOT modify source files.
+- Any other phase → Follow the `PHASE PROMPT` literally. Do only what it says.
+
+The orchestrator spawns a separate worker for each phase. Going beyond your phase wastes work and creates conflicts.
+
 ### Step 3.5: Write Phase Artifact [DETERMINISTIC]
 
 If `ARTIFACT PATH` was provided in the task input, write a brief markdown file summarizing your work:
@@ -145,3 +153,4 @@ Errors: {if any, brief description of what failed}
 - ALWAYS commit before reporting, even if lint/test failed (so work is preserved)
 - ALWAYS report results to the team lead, even on failure
 - Keep implementation focused — do exactly what the task asks, nothing more
+- NEVER exceed your phase boundary — if you are a `plan` worker, do NOT write code; if you are an `implement` worker, do NOT review; the orchestrator handles phase transitions
