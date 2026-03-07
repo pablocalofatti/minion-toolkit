@@ -493,7 +493,33 @@ For each worker report:
 
 4. **Phase progression check:**
    - Look up the task's workflow phases (ordered list from Step 1.3)
-   - Find the **next phase** after the completed one
+   - Determine if the completed phase is involved in a cycle:
+     - **Is it a cycle target?** (i.e., another phase's `Cycle` property points to this phase name)
+     - **Does it have a `Cycle` property?** (i.e., it declares `Cycle: {target}`)
+
+   **Case A — Cycle target phase completed with `success` (e.g., review passes):**
+   - EXIT CYCLE. The review found no issues.
+   - Skip the cycling phase (fix) entirely — do not spawn it.
+   - Advance to whatever phase comes **after** the cycling phase in document order.
+   - If no phase comes after the cycling phase → task is fully complete. Use `TaskUpdate` to mark the task as `completed`.
+
+   **Case B — Cycle target phase completed with non-`success` status (e.g., `review_failed`):**
+   - Continue normally to the next phase (the cycling phase, e.g., fix).
+   - Spawn the fix worker as usual — treat `review_failed` as a valid "proceed to fix" signal, NOT as a task failure.
+   - Use the standard spawn logic (Agent tool with worktree isolation, background execution, full prompt from Step 6).
+
+   **Case C — Cycling phase completed (e.g., fix completes with `success`):**
+   - Read the task's `cycle_count` from `status.json` (default `0`).
+   - **If `cycle_count < max_cycles`:**
+     - Increment `cycle_count` in `status.json`.
+     - CYCLE BACK: Reset the phase pointer to the cycle target phase (review).
+     - Update the artifact path for the target phase with version suffix: `review-{cycle_count + 1}.md` (e.g., `review-2.md` for the second iteration). First iteration has no suffix.
+     - Spawn a new worker for the cycle target phase with the versioned artifact path and accumulated `PREVIOUS ARTIFACTS`.
+   - **If `cycle_count >= max_cycles`:**
+     - MAX REACHED. Log a warning: "Max cycles ({max_cycles}) reached for task {N}. Continuing despite unresolved issues."
+     - Advance to whatever phase comes **after** the cycling phase in document order (or complete the task).
+
+   **Case D — Normal phase (not involved in any cycle):**
    - **If next phase exists AND status is `success`:**
      - Update `status.json`: set next phase to `in_progress`
      - Resolve the next phase's agent (from workflow template)
