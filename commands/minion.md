@@ -440,13 +440,15 @@ PHASE: {current phase name, e.g. "plan", "implement", "review" — omit if using
 PHASE PROMPT: {resolved prompt from workflow template, with {task} replaced by actual task title + description — omit if using default workflow}
 ARTIFACT PATH: {resolved artifact path, e.g. ".minion/task-1-add-validation/implement.md" — omit if using default workflow}
 PREVIOUS ARTIFACTS: {comma-separated list of artifact paths from completed phases, or "none" — omit if using default workflow or first phase}
+CYCLE: {cycle_target} → {current_phase} (iteration {cycle_count + 1} of {max_cycles}) — omit if phase has no Cycle or is not a cycle target
+CYCLE INSTRUCTION: Report STATUS: success if no issues found (exits the cycle). Report STATUS: review_failed if issues remain (triggers another fix iteration). — omit if not inside a cycle
 
 IMPORTANT — When you finish, send your results via SendMessage using this exact format:
 
 --- MINION REPORT ---
 TASK: {N}
 PHASE: {phase name, or "implement" if not in a multi-phase workflow}
-STATUS: {success | partial | lint_failed | test_failed | implementation_failed}
+STATUS: {success | partial | lint_failed | test_failed | implementation_failed | review_failed}
 BRANCH: {your branch name}
 ARTIFACT: {path to artifact file written, or "none"}
 FILES CHANGED: {comma-separated list of files created or modified}
@@ -472,7 +474,7 @@ Wait for worker reports. Workers send results via `SendMessage` when they comple
 --- MINION REPORT ---
 TASK: {N}
 PHASE: {phase name, or "implement" if not in a multi-phase workflow}
-STATUS: {success | partial | lint_failed | test_failed | implementation_failed}
+STATUS: {success | partial | lint_failed | test_failed | implementation_failed | review_failed}
 BRANCH: {exact branch name, e.g. minion/task-1-add-user-validation}
 ARTIFACT: {path to artifact file written, or "none"}
 FILES CHANGED: {comma-separated list of files created or modified}
