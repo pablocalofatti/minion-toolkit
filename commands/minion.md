@@ -100,6 +100,8 @@ Read the workflow file and extract:
 - **Agent** — value after `- Agent:` (agent name, defaults to `default_agent` if not specified)
 - **Gate** — value after `- Gate:` (`artifact` or `exit`, defaults to `artifact`)
 - **Command** — nested block under `- Command:` with `canonical:` and optional platform overrides (e.g., `claude-code:`, `opencode:`, `codex:`)
+- **Cycle** — value after `- Cycle:` (phase name to jump back to after this phase completes successfully, or `null` if not set)
+- **Max-cycles** — value after `- Max-cycles:` (integer, defaults to `3` if `Cycle` is set, ignored if `Cycle` is not set)
 
 Store phases as an **ordered list** — phase execution follows document order.
 
