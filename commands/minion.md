@@ -521,6 +521,40 @@ For each worker report:
    - Mark the completed phase's status as `completed` with timestamp
    - If `STATUS` is not `success`, mark remaining phases as `skipped`
 
+3.25. **Post-hook check (after phase completes successfully):**
+
+   After updating `status.json` and before the pre-hook check:
+
+   - Check if the **completed** phase has a `Post-hook` value (from Step 1.3)
+   - If yes AND the worker's `STATUS` was `success`:
+     - Resolve template variables in the hook command: replace `{task}` with the task title, `{task_slug}` with the slug, `{task_number}` with N, `{phase}` with the completed phase name
+     - Run the resolved command using the `Bash` tool in the task's worktree directory
+     - **If the command exits with code 0:** Continue to step 3.5 and phase progression as normal
+     - **If the command exits with non-zero code:**
+       - Log: `[{HH:MM:SS}] Task {N} ({title}): {phase} post-hook FAILED (exit code {code})`
+       - Override the phase status to `failed` in `status.json` (even though the worker succeeded)
+       - Mark all remaining phases as `skipped`
+       - Use `TaskUpdate` to mark the task as `completed`
+       - Do NOT proceed to the next phase — skip to the next report
+       - Print the progress table showing the updated state
+
+3.5. **Pre-hook check (before spawning next phase):**
+
+   This step applies every time the orchestrator is about to spawn a worker for a new phase (in Cases B, C, and D below). Before calling the `Agent` tool to spawn the worker:
+
+   - Check if the target phase has a `Pre-hook` value (from Step 1.3)
+   - If yes:
+     - Resolve template variables in the hook command: replace `{task}` with the task title, `{task_slug}` with the slug, `{task_number}` with N, `{phase}` with the target phase name
+     - Run the resolved command using the `Bash` tool in the task's worktree directory
+     - **If the command exits with code 0:** Proceed to spawn the worker as normal
+     - **If the command exits with non-zero code:**
+       - Log: `[{HH:MM:SS}] Task {N} ({title}): {phase} pre-hook FAILED (exit code {code})`
+       - Mark the phase as `failed` in `status.json`
+       - Mark all remaining phases as `skipped`
+       - Use `TaskUpdate` to mark the task as `completed`
+       - Do NOT spawn the worker — skip to the next report
+       - Print the progress table showing the updated state
+
 4. **Phase progression check:**
    - Look up the task's workflow phases (ordered list from Step 1.3)
    - Determine if the completed phase is involved in a cycle:
