@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.8.1] - 2026-03-07
+
+### Fixed
+- enforce Opus model and add anti-hallucination guardrail (#28) (`648befb`)
+
+### Other
+- v1.8.0 — update changelog and version (#27) (`c4636a3`)
+
 ## [1.8.0] - 2026-03-07
 
 ### Added
