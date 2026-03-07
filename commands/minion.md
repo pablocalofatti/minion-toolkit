@@ -480,12 +480,65 @@ ERRORS: {error details if status is not success, or "none"}
 For each worker report:
 1. Parse the structured report — extract `TASK`, `PHASE`, `STATUS`, `BRANCH`, `ARTIFACT`, `FILES CHANGED`, `OUT-OF-SCOPE FILES`, `SUMMARY`, and `ERRORS`
 2. If the report is malformed or missing fields, log a warning but extract what you can
-3. Use `TaskUpdate` to mark the task as `completed`
-4. If there are queued tasks remaining, spawn the next worker (go back to Step 6 logic)
+3. Update `.minion/{task_slug}/status.json`:
+   - Mark the completed phase's status as `completed` with timestamp
+   - If `STATUS` is not `success`, mark remaining phases as `skipped`
+
+4. **Phase progression check:**
+   - Look up the task's workflow phases (ordered list from Step 1.3)
+   - Find the **next phase** after the completed one
+   - **If next phase exists AND status is `success`:**
+     - Update `status.json`: set next phase to `in_progress`
+     - Resolve the next phase's agent (from workflow template)
+     - Spawn a new worker for the next phase using the `Agent` tool:
+       - `subagent_type`: the next phase's agent
+       - `name`: `"worker-{task_number}-{phase_name}"` (e.g., `worker-1-review`)
+       - `team_name`: the team name from Step 4
+       - `isolation`: `"worktree"` (reuse the same worktree/branch)
+       - `run_in_background`: `true`
+     - The prompt includes all fields from Step 6 plus:
+       - `PHASE`: the next phase name
+       - `PHASE PROMPT`: the next phase's resolved prompt
+       - `ARTIFACT PATH`: the next phase's artifact path
+       - `PREVIOUS ARTIFACTS`: comma-separated list of all completed phase artifacts so far
+   - **If next phase exists AND status is NOT `success`:**
+     - Task is done (failed). Mark remaining phases as `skipped` in `status.json`
+     - Use `TaskUpdate` to mark the task as `completed`
+   - **If no next phase (or workflow is `default`):**
+     - Task is fully complete. Use `TaskUpdate` to mark the task as `completed`
+     - If there are queued tasks remaining, spawn the next worker (go back to Step 6 logic)
+
+5. Continue monitoring until all tasks have completed all their phases or failed
 
 **Timeout:** If a worker has not reported within **15 minutes**, mark its task as failed with status `timeout` and move on. Include it in the summary as a timed-out task.
 
 Continue until all tasks (spawned + queued) have either completed or timed out.
+
+### Writing status.json
+
+When creating or updating `.minion/{task_slug}/status.json`, write the full JSON structure:
+
+```json
+{
+  "task_number": "{N}",
+  "task_title": "{title}",
+  "workflow": "{workflow_name}",
+  "current_phase": "{phase_name or 'completed' or 'failed'}",
+  "phases": {
+    "{phase_name}": {
+      "status": "completed | in_progress | pending | skipped",
+      "agent": "{agent_name}",
+      "artifact": "{artifact_path or null}",
+      "started_at": "{ISO timestamp or null}",
+      "completed_at": "{ISO timestamp or null}"
+    }
+  },
+  "branch": "{branch_name}",
+  "platform": "{platform}"
+}
+```
+
+Initialize `status.json` when the first phase starts (Step 6 — set all phases to `pending`, first phase to `in_progress`). Update it on each phase completion (this step).
 
 ## Step 8: Present Summary
 
