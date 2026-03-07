@@ -12,8 +12,11 @@ You are **team-aware**: before spawning workers, you discover available agents (
 
 The user's input is in `$ARGUMENTS`.
 
-- If `$ARGUMENTS` contains a file path (e.g., `tasks.md`, `speckit/tasks.md`), read that file.
-- If `$ARGUMENTS` is empty, look for `speckit/tasks.md` in the current project working directory.
+- **Parse workflow flag:** Check if `$ARGUMENTS` contains `--workflow {name}`. If present, extract `{name}` as the workflow name and remove the `--workflow {name}` portion from arguments before parsing the task file path. Store the workflow name.
+- **Parse platform flag:** Check if `$ARGUMENTS` contains `--platform {name}`. If present, extract `{name}` as the platform override and remove it from arguments. Store the platform name.
+- If no `--workflow` flag, set workflow name to `default`.
+- If `$ARGUMENTS` (after flag removal) contains a file path (e.g., `tasks.md`, `speckit/tasks.md`), read that file.
+- If `$ARGUMENTS` is empty after flag removal, look for `speckit/tasks.md` in the current project working directory.
 - If the file is not found, tell the user and show the expected format (see below).
 
 Parse the file for tasks. Each task is a markdown section with a heading like:
@@ -60,6 +63,95 @@ The `Agent` field is optional. If omitted, the orchestrator auto-detects the bes
 
 
 If zero actionable tasks remain after filtering, inform the user and stop.
+
+## Step 1.3: Resolve Workflow
+
+Locate and parse the workflow template for this run.
+
+### Locate Template
+
+Search for the workflow file in priority order:
+1. `{project_root}/.claude/workflows/{workflow_name}.md`
+2. `~/.claude/workflows/{workflow_name}.md`
+
+If not found, list available workflows from both locations and stop with an error message:
+```
+Workflow "{workflow_name}" not found. Available workflows:
+- default — Standard implementation with PR-based code review
+- tdd — Test-driven development pipeline
+- quick — Fast prototyping, no review
+- full-pipeline — Enterprise pipeline with auto-fix
+```
+
+### Parse Template
+
+Read the workflow file and extract:
+
+**From YAML frontmatter:**
+- `name` — workflow identifier
+- `description` — human-readable description
+- `default_agent` — fallback agent for phases without explicit Agent (default: `minion-worker`)
+- `platforms` — list of supported platforms (informational)
+
+**From each `## Phase:` section (in document order):**
+- **Phase name** — text after `## Phase:` (e.g., `plan`, `implement`, `review`)
+- **Prompt** — value after `- Prompt:` (template string, may contain `{task}`, `{task_slug}`, `{task_number}`)
+- **Artifact** — value after `- Artifact:` (file path, may contain `{task_slug}`)
+- **Agent** — value after `- Agent:` (agent name, defaults to `default_agent` if not specified)
+- **Gate** — value after `- Gate:` (`artifact` or `exit`, defaults to `artifact`)
+- **Command** — nested block under `- Command:` with `canonical:` and optional platform overrides (e.g., `claude-code:`, `opencode:`, `codex:`)
+
+Store phases as an **ordered list** — phase execution follows document order.
+
+### Detect Platform
+
+Determine the current platform (first match wins):
+1. Explicit `--platform {name}` flag from Step 1 → use it
+2. `$MINION_PLATFORM` environment variable → use its value
+3. Running inside Claude Code → `claude-code`
+4. `~/.config/opencode/` exists → `opencode`
+5. `~/.codex/` exists → `codex`
+6. Fallback → `claude-code`
+
+### Translate Commands
+
+For each phase, resolve the command for the detected platform:
+1. If the phase has an explicit override for the current platform under its `Command:` block → use it
+2. If not, auto-translate from the `canonical` command using these rules:
+   - `claude-code`: `"/" + canonical` (keep `:` separator) — e.g., `minion:plan` → `/minion:plan`
+   - `opencode`: `"/" + canonical.replace(":", "-")` — e.g., `minion:plan` → `/minion-plan`
+   - `codex`: `"$" + canonical.replace(":", "-")` — e.g., `minion:plan` → `$minion-plan`
+
+### Validate
+
+Check the resolved workflow for errors:
+- At least one phase is defined — error: "Workflow has no phases defined"
+- No duplicate phase names — error: "Duplicate phase name: {name}"
+- All referenced agents exist in the agent registry (from Step 1.7) or match `default_agent` — warning: "Agent '{name}' not found, will use minion-worker"
+- All artifact paths contain `{task_slug}` placeholder — warning: "Artifact path missing {task_slug} — artifacts may overwrite across tasks"
+- All phases have a `Prompt` value — error: "Phase '{name}' has no Prompt"
+
+If any error is found, report it and stop. Warnings are displayed but execution continues.
+
+### Artifact Directory Setup
+
+1. Create the `.minion/` directory in the project root if it doesn't exist
+2. Add `.minion/` to the project's `.gitignore` if not already present (append a new line `.minion/` to the file)
+3. Write `run.json` to `.minion/`:
+
+```json
+{
+  "run_id": "minion-{timestamp}",
+  "workflow": "{workflow_name}",
+  "platform": "{detected_platform}",
+  "started_at": "{ISO timestamp}",
+  "tasks": ["{list of task numbers}"],
+  "waves": ["{wave arrays from Step 1.5}"],
+  "max_parallel": "{N}"
+}
+```
+
+Note: `waves` and `max_parallel` fields are populated after Step 1.5 and Step 3 respectively. Initialize them as empty/null and update later.
 
 ## Step 1.5: Resolve Dependencies
 
@@ -257,6 +349,9 @@ Also create a `TaskCreate` entry for the Wave 0 task so it appears in the task t
 Before proceeding, present a summary and ask for confirmation using `AskUserQuestion`.
 
 Display:
+- **Workflow:** `{workflow_name}` — {workflow description from template}
+- **Phases:** {ordered phase list with arrows} (e.g., "plan → implement → review")
+- **Platform:** {detected platform} (e.g., "claude-code")
 - **Available agents:** list all discovered agents with their model (e.g., "my-backend-agent (sonnet), my-frontend-agent (sonnet)"), or "none — using minion-worker for all tasks" if no agents found
 - **Tasks to run:** numbered list with title AND assigned agent:
   ```
@@ -322,7 +417,7 @@ For each task in the current wave, up to the max parallel worker count, spawn a 
 
 - **Branch naming convention:** Each worker MUST create its own branch from the current HEAD using the format `minion/task-{N}-{slug}`, where `{N}` is the task number and `{slug}` is a lowercase kebab-case summary of the task title (max 40 chars). Example: `minion/task-1-add-user-validation`. The orchestrator computes the branch name and passes it to the worker — workers do NOT choose their own branch names.
 
-- The **prompt** sent to each worker MUST include all 9 fields:
+- The **prompt** sent to each worker MUST include all fields below. When a workflow with multiple phases is active, include the phase fields; otherwise omit them for v1 compatibility:
 
 ```
 TASK: {task title}
@@ -335,13 +430,20 @@ LINT COMMAND: {resolved lint command, or "none"}
 TEST COMMAND: {resolved test command, or "none"}
 TEAM NAME: {team name from Step 4}
 AGENT TYPE: {resolved agent_type from Step 1.7, e.g. "my-backend-agent" or "minion-worker"}
+WORKFLOW: {workflow name, e.g. "tdd" — omit if "default"}
+PHASE: {current phase name, e.g. "plan", "implement", "review" — omit if using default workflow}
+PHASE PROMPT: {resolved prompt from workflow template, with {task} replaced by actual task title + description — omit if using default workflow}
+ARTIFACT PATH: {resolved artifact path, e.g. ".minion/task-1-add-validation/implement.md" — omit if using default workflow}
+PREVIOUS ARTIFACTS: {comma-separated list of artifact paths from completed phases, or "none" — omit if using default workflow or first phase}
 
 IMPORTANT — When you finish, send your results via SendMessage using this exact format:
 
 --- MINION REPORT ---
 TASK: {N}
+PHASE: {phase name, or "implement" if not in a multi-phase workflow}
 STATUS: {success | partial | lint_failed | test_failed | implementation_failed}
 BRANCH: {your branch name}
+ARTIFACT: {path to artifact file written, or "none"}
 FILES CHANGED: {comma-separated list of files created or modified}
 OUT-OF-SCOPE FILES: {files modified outside the task's Files: declaration, or "none"}
 SUMMARY: {1-2 sentence description of what was done}
@@ -364,8 +466,10 @@ Wait for worker reports. Workers send results via `SendMessage` when they comple
 ```
 --- MINION REPORT ---
 TASK: {N}
+PHASE: {phase name, or "implement" if not in a multi-phase workflow}
 STATUS: {success | partial | lint_failed | test_failed | implementation_failed}
 BRANCH: {exact branch name, e.g. minion/task-1-add-user-validation}
+ARTIFACT: {path to artifact file written, or "none"}
 FILES CHANGED: {comma-separated list of files created or modified}
 OUT-OF-SCOPE FILES: {files modified outside the task's Files: declaration, or "none"}
 SUMMARY: {1-2 sentence description of what was done}
@@ -374,14 +478,67 @@ ERRORS: {error details if status is not success, or "none"}
 ```
 
 For each worker report:
-1. Parse the structured report — extract `TASK`, `STATUS`, `BRANCH`, `FILES CHANGED`, `OUT-OF-SCOPE FILES`, `SUMMARY`, and `ERRORS`
+1. Parse the structured report — extract `TASK`, `PHASE`, `STATUS`, `BRANCH`, `ARTIFACT`, `FILES CHANGED`, `OUT-OF-SCOPE FILES`, `SUMMARY`, and `ERRORS`
 2. If the report is malformed or missing fields, log a warning but extract what you can
-3. Use `TaskUpdate` to mark the task as `completed`
-4. If there are queued tasks remaining, spawn the next worker (go back to Step 6 logic)
+3. Update `.minion/{task_slug}/status.json`:
+   - Mark the completed phase's status as `completed` with timestamp
+   - If `STATUS` is not `success`, mark remaining phases as `skipped`
+
+4. **Phase progression check:**
+   - Look up the task's workflow phases (ordered list from Step 1.3)
+   - Find the **next phase** after the completed one
+   - **If next phase exists AND status is `success`:**
+     - Update `status.json`: set next phase to `in_progress`
+     - Resolve the next phase's agent (from workflow template)
+     - Spawn a new worker for the next phase using the `Agent` tool:
+       - `subagent_type`: the next phase's agent
+       - `name`: `"worker-{task_number}-{phase_name}"` (e.g., `worker-1-review`)
+       - `team_name`: the team name from Step 4
+       - `isolation`: `"worktree"` (reuse the same worktree/branch)
+       - `run_in_background`: `true`
+     - The prompt includes all fields from Step 6 plus:
+       - `PHASE`: the next phase name
+       - `PHASE PROMPT`: the next phase's resolved prompt
+       - `ARTIFACT PATH`: the next phase's artifact path
+       - `PREVIOUS ARTIFACTS`: comma-separated list of all completed phase artifacts so far
+   - **If next phase exists AND status is NOT `success`:**
+     - Task is done (failed). Mark remaining phases as `skipped` in `status.json`
+     - Use `TaskUpdate` to mark the task as `completed`
+   - **If no next phase (or workflow is `default`):**
+     - Task is fully complete. Use `TaskUpdate` to mark the task as `completed`
+     - If there are queued tasks remaining, spawn the next worker (go back to Step 6 logic)
+
+5. Continue monitoring until all tasks have completed all their phases or failed
 
 **Timeout:** If a worker has not reported within **15 minutes**, mark its task as failed with status `timeout` and move on. Include it in the summary as a timed-out task.
 
 Continue until all tasks (spawned + queued) have either completed or timed out.
+
+### Writing status.json
+
+When creating or updating `.minion/{task_slug}/status.json`, write the full JSON structure:
+
+```json
+{
+  "task_number": "{N}",
+  "task_title": "{title}",
+  "workflow": "{workflow_name}",
+  "current_phase": "{phase_name or 'completed' or 'failed'}",
+  "phases": {
+    "{phase_name}": {
+      "status": "completed | in_progress | pending | skipped",
+      "agent": "{agent_name}",
+      "artifact": "{artifact_path or null}",
+      "started_at": "{ISO timestamp or null}",
+      "completed_at": "{ISO timestamp or null}"
+    }
+  },
+  "branch": "{branch_name}",
+  "platform": "{platform}"
+}
+```
+
+Initialize `status.json` when the first phase starts (Step 6 — set all phases to `pending`, first phase to `in_progress`). Update it on each phase completion (this step).
 
 ## Step 8: Present Summary
 

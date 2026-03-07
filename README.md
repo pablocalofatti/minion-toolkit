@@ -133,6 +133,76 @@ Successful: 2/2
 Branches ready for review: minion/task-1-..., minion/task-2-...
 ```
 
+## Workflows
+
+Workflows define the phase sequence for task execution. Use `--workflow` to select one:
+
+| Workflow | Phases | Use Case |
+|----------|--------|----------|
+| `default` | implement → review | Standard development (v1 behavior) |
+| `tdd` | plan → implement → review | Test-driven development |
+| `quick` | implement | Fast prototyping, no review |
+| `full-pipeline` | plan → implement → review → fix | Maximum quality guardrails |
+
+### Workflow Usage
+
+```bash
+# Use TDD workflow
+/minion --workflow tdd tasks.md
+
+# Default workflow (same as v1)
+/minion tasks.md
+
+# Quick prototyping
+/minion --workflow quick tasks.md
+```
+
+### Custom Workflows
+
+Create `.md` files in `~/.claude/workflows/` or `{project}/.claude/workflows/`:
+
+```markdown
+---
+name: my-workflow
+description: My custom workflow
+version: 1.0
+default_agent: minion-worker
+platforms:
+  - claude-code
+---
+
+## Phase: plan
+- Prompt: "Plan: {task}"
+- Artifact: .minion/{task_slug}/plan.md
+- Gate: artifact
+- Command:
+  - canonical: minion:plan
+
+## Phase: implement
+- Prompt: "Implement: {task}"
+- Artifact: .minion/{task_slug}/implement.md
+- Gate: artifact
+- Command:
+  - canonical: minion:implement
+```
+
+### Cross-Platform Support
+
+Workflow templates support Claude Code, OpenCode, and Codex. Commands use a canonical format that auto-translates per platform:
+
+| Canonical | Claude Code | OpenCode | Codex |
+|-----------|------------|----------|-------|
+| `minion:plan` | `/minion:plan` | `/minion-plan` | `$minion-plan` |
+
+Add platform-specific overrides when needed:
+
+```markdown
+- Command:
+  - canonical: minion:plan
+  - claude-code: /superpowers:brainstorming
+  - opencode: @plan
+```
+
 ## Architecture
 
 ```
