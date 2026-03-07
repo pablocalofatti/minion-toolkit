@@ -487,6 +487,34 @@ ERRORS: {error details if status is not success, or "none"}
 ```
 
 For each worker report:
+
+   **Progress output** — immediately after receiving a report, print:
+
+   a. A timestamped progress line:
+   ```
+   [{HH:MM:SS}] Task {N} ({title}): {phase} -> {STATUS}
+   ```
+
+   b. If spawning the next phase, also print:
+   ```
+   [{HH:MM:SS}] Task {N} ({title}): {next_phase} -> in_progress
+   ```
+
+   c. A compact summary table showing ALL tasks and their current phase status:
+   ```
+   +---------------------+------+-----------+--------+-----+
+   | Task                | plan | implement | review | fix |
+   +---------------------+------+-----------+--------+-----+
+   | 1. Add validation   |  v   |    o      |   .    |  .  |
+   | 2. Fix pagination   |  o   |    .      |   .    |  .  |
+   | 3. Add tests        |  o   |    .      |   .    |  .  |
+   +---------------------+------+-----------+--------+-----+
+   ```
+
+   **Status symbols:** `v` = completed, `o` = in_progress, `x` = failed, `>` = skipped, `.` = pending
+
+   The table columns are the workflow phases (from Step 1.3). For the `default` workflow, show a single `implement` column. Print this table after EVERY state change — it gives the user a real-time dashboard.
+
 1. Parse the structured report — extract `TASK`, `PHASE`, `STATUS`, `BRANCH`, `ARTIFACT`, `FILES CHANGED`, `OUT-OF-SCOPE FILES`, `SUMMARY`, and `ERRORS`
 2. If the report is malformed or missing fields, log a warning but extract what you can
 3. Update `.minion/{task_slug}/status.json`:
