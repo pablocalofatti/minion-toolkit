@@ -142,7 +142,7 @@ Workflows define the phase sequence for task execution. Use `--workflow` to sele
 | `default` | implement → review | Standard development (v1 behavior) |
 | `tdd` | plan → implement → review | Test-driven development |
 | `quick` | implement | Fast prototyping, no review |
-| `full-pipeline` | plan → implement → review → fix | Maximum quality guardrails |
+| `full-pipeline` | plan → implement → review ⇄ fix | Maximum quality with review-fix cycle (up to 3 iterations) |
 
 ### Workflow Usage
 
@@ -185,6 +185,37 @@ platforms:
 - Command:
   - canonical: minion:implement
 ```
+
+### Cyclic Workflows
+
+The `full-pipeline` workflow includes a review-fix cycle: if review finds issues, fix runs and loops back to re-review (up to 3 iterations). Add cycles to custom workflows with `Cycle` and `Max-cycles`:
+
+```markdown
+## Phase: fix
+- Prompt: "Address review feedback: {task}"
+- Artifact: .minion/{task_slug}/fix.md
+- Gate: artifact
+- Cycle: review
+- Max-cycles: 3
+- Command:
+  - canonical: minion:fix
+```
+
+### Phase Hooks
+
+Run shell commands before or after any phase. Hooks block on failure (non-zero exit = phase fails):
+
+```markdown
+## Phase: review
+- Prompt: "Review the implementation: {task}"
+- Artifact: .minion/{task_slug}/review.md
+- Pre-hook: pnpm lint --quiet
+- Post-hook: echo "Review complete for {task_slug}"
+- Command:
+  - canonical: minion:review
+```
+
+Template variables available: `{task}`, `{task_slug}`, `{task_number}`, `{phase}`. For fire-and-forget hooks, append `|| true`.
 
 ### Cross-Platform Support
 
@@ -235,6 +266,9 @@ Add platform-specific overrides when needed:
 - **Failure handling** — partial work is preserved on branches for manual pickup
 - **PR creation** — one-click PR creation for successful branches via `gh`
 - **Structured reporting** — workers report status, files changed, and errors in a parseable format
+- **Real-time progress** — live dashboard with timestamped updates and summary table during execution
+- **Phase hooks** — run shell commands before/after any workflow phase (lint, notify, validate)
+- **Cyclic workflows** — review-fix loops with configurable iteration limits
 
 ## CI/CD Pipeline
 

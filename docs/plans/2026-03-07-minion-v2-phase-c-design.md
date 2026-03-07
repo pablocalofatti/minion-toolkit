@@ -85,7 +85,7 @@ Two new optional properties on any `## Phase:` section:
 
 - **Pre-hook** runs before the worker is spawned for that phase. If it exits non-zero, the phase is marked `failed` and the task follows normal failure logic (skip remaining phases).
 - **Post-hook** runs after the worker completes the phase successfully. If it exits non-zero, the phase is marked `failed` despite the worker succeeding.
-- Hooks run in the **task's worktree directory** (same working directory as the worker), so they have access to the task's branch and files.
+- Hooks run in the **task's worktree directory** (same working directory as the worker), so they have access to the task's branch and files. **Exception:** the first phase's pre-hook runs in the **project root directory** because the worktree is not yet created at that point (Step 6 initial spawn). All subsequent hooks (Step 7 phase progression) run in the worktree.
 - Template variables are available: `{task}`, `{task_slug}`, `{task_number}`, `{phase}`.
 
 ### Failure Behavior
