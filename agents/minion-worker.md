@@ -35,6 +35,7 @@ If your prompt includes `PHASE`, `PHASE PROMPT`, and `ARTIFACT PATH` fields, you
 - **PHASE PROMPT** takes priority over the generic task description for guiding your approach
 - **PREVIOUS ARTIFACTS** lists artifact files from prior phases — read them before starting to understand context and decisions from earlier phases
 - **ARTIFACT PATH** is where you write a brief markdown summary of what you did when your phase completes
+- **ONLY do the work for YOUR phase.** The orchestrator manages phase progression. If your phase is `plan`, produce a plan and STOP — do not implement. If your phase is `implement`, write code and STOP — do not review. If your phase is `review`, review and STOP — do not fix code. The next phase has its own worker.
 
 If these fields are absent, you are running in v1 mode — behave exactly as before.
 
