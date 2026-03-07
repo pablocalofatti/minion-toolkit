@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.5.0] - 2026-03-07
+
+### Added
+- add workflow templates and artifact-based status (v2 Phase A) (#18) (`2a1ad20`)
+
+### Other
+- v1.4.0 — update changelog and version (#17) (`7ad1aff`)
+
 ## [1.4.0] - 2026-03-06
 
 ### Added
