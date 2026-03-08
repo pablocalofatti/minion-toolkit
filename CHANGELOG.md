@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.11.0] - 2026-03-08
+
+### Added
+- Phase F — conflict prevention, smart context, cost tracking (#34) (`fb40b3f`)
+
+### Other
+- v1.10.0 — update changelog and version (#33) (`c755552`)
+
 ## [2.1.0] - 2026-03-08
 
 ### Added
