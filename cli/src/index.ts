@@ -1,11 +1,15 @@
 #!/usr/bin/env node
 
+import { createRequire } from "node:module";
 import { Command } from "commander";
 import { install } from "./install.js";
 import { uninstall } from "./uninstall.js";
 import { update } from "./update.js";
 import { agents } from "./agents.js";
 import { doctor } from "./doctor.js";
+
+const require = createRequire(import.meta.url);
+const { version } = require("../package.json") as { version: string };
 
 const program = new Command();
 
@@ -14,7 +18,7 @@ program
   .description(
     "CLI installer for minion-toolkit — parallel AI worker orchestration for Claude Code"
   )
-  .version("2.2.0");
+  .version(version);
 
 program
   .command("install")
