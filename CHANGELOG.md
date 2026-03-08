@@ -1,12 +1,15 @@
 # Changelog
 
-## [1.10.0] - 2026-03-08
+## [2.1.0] - 2026-03-08
 
 ### Added
-- Phase E — cross-phase memory, dry-run, health monitoring, post-run report (#32) (`995444f`)
+- Conflict prevention — file overlap detection between parallel tasks with auto-serialize option
+- Smart context gathering — workers auto-discover related code via codegraph or grep before implementing
+- Cost tracking — pre-run cost estimates and post-run approximate cost per task in report
 
-### Other
-- v1.9.0 — update changelog and version (#31) (`18be948`)
+### Changed
+- Blueprint Step 2 now includes Step 2b for automated context gathering (max 5 queries)
+- Status.json schema expanded with `iterations` field for cost tracking
 
 ## [2.0.0] - 2026-03-08
 
