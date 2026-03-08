@@ -296,6 +296,7 @@ Add platform-specific overrides when needed:
 - **Real-time progress** — live dashboard with timestamped updates and summary table during execution
 - **Phase hooks** — run shell commands before/after any workflow phase (lint, notify, validate)
 - **Cyclic workflows** — review-fix loops with configurable iteration limits
+- **Post-run report** — generates `.minion/report.md` with run metadata, per-task results, failure details, and learnings
 
 ## CI/CD Pipeline
 

@@ -788,6 +788,58 @@ Rules:
 - If the file exceeds 100 lines after appending, remove the oldest `## Run` section(s) until it's under 100 lines
 - Only write entries that contain useful information — skip the learnings step if all tasks succeeded with no lint/test fixes (nothing to learn from)
 
+### Write Post-Run Report
+
+After writing learnings, generate a comprehensive run report at `.minion/report.md`:
+
+````markdown
+# Minion Run Report
+
+## Run Metadata
+- **Date:** {YYYY-MM-DD HH:MM}
+- **Workflow:** {workflow_name} ({phase list with arrows})
+- **Duration:** {total elapsed time from first worker spawn to last report}
+- **Tasks:** {total} total, {succeeded} succeeded, {failed} failed, {skipped} skipped
+
+## Task Results
+
+| # | Task | Status | Branch | Phases | Files Changed |
+|---|------|--------|--------|--------|---------------|
+| 1 | {title} | {status} | {branch} | {phases completed}/{total phases} | {count} |
+| 2 | {title} | {status} | {branch} | {phases completed}/{total phases} | {count} |
+
+## Successful Tasks
+
+{For each successful task:}
+### Task {N}: {title}
+- **Branch:** `{branch-name}`
+- **Files changed:** {comma-separated list}
+- **Summary:** {summary from worker report}
+
+## Failed Tasks
+
+{For each failed task:}
+### Task {N}: {title}
+- **Branch:** `{branch-name}` (preserved for manual fix)
+- **Phase failed:** {phase name}
+- **Status:** {status}
+- **Error:** {error details from worker report}
+
+## Skipped Tasks
+
+{For each skipped task — DONE/SKIP/user-skipped:}
+- Task {N}: {title} — {reason}
+
+## Learnings
+
+{Copy of the learnings entry written above, or "No new learnings — all tasks succeeded cleanly."}
+````
+
+Rules:
+- Overwrite any existing `.minion/report.md` — each run creates a fresh report
+- If `.minion/` directory doesn't exist, this is an error (it should have been created in Step 1.3)
+- The report should be self-contained — a user reading only this file should understand what happened
+
 ## Step 9: Create PRs and Enable Auto-Merge
 
 Automatically create pull requests for all **successful** tasks and enable auto-merge. The orchestrator then monitors the pipeline in Step 9.5.
