@@ -21,6 +21,8 @@ The user's input is in `$ARGUMENTS`.
 - If `$ARGUMENTS` is empty after flag removal, look for `speckit/tasks.md` in the current project working directory.
 - If the file is not found, tell the user and show the expected format (see below).
 
+- **MCP delegation (optional):** If the `minion_start` MCP tool is available, you may call the MCP server's `parse_tasks` function to get structured JSON output instead of parsing markdown manually. This provides more reliable task extraction with validated fields. If the MCP tool is not available or fails, fall back to the prose parsing below.
+
 Parse the file for tasks. Each task is a markdown section with a heading like:
 
 ```
@@ -201,6 +203,8 @@ If `resume_mode` is `true`:
 
 If any tasks have `dependsOn` values, compute execution waves:
 
+- **MCP delegation (optional):** If MCP tools are available, call `resolve_dag` with the parsed task list to get waves, critical path, and cycle detection as structured JSON. Fall back to prose topological sort if unavailable.
+
 1. Build a DAG from task dependencies
 2. Run topological sort (Kahn's algorithm) to group tasks into waves
 3. Tasks in the same wave can run in parallel; waves execute sequentially
@@ -214,6 +218,8 @@ Store the computed waves, critical path, and wave count for the confirmation ste
 ## Step 1.6: Conflict Analysis
 
 Detect file-level overlap between tasks in the same wave to prevent merge conflicts.
+
+- **MCP delegation (optional):** If MCP tools are available, call `check_scope` with the task list and wave assignments to detect file overlaps. Fall back to prose matrix comparison if unavailable.
 
 1. **Build file-overlap matrix:** For each wave, compare the `Files:` field of every task pair in that wave. Two tasks overlap if they share any file path (exact match after trimming whitespace).
 
@@ -446,6 +452,7 @@ Display:
 - **Test command:** the detected command, or "none detected"
 - **Max parallel workers:** `min(task_count, 3)` — this is the default
 - **Estimated cost:** Compute a rough cost estimate using this heuristic:
+  - **MCP delegation (optional):** If MCP `estimate_cost` tool is available, call it with task count, phase count, and model name for a more accurate per-model estimate. Fall back to heuristic below if unavailable.
   - Per task: `phases × avg_iterations_per_phase × avg_tokens_per_iteration × model_rate`
   - Defaults: `avg_iterations_per_phase = 8`, `avg_tokens_per_iteration = 4000`, `model_rate = $3/$15 per 1M input/output tokens` (Sonnet pricing)
   - Total: sum across all tasks
