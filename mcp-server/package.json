@@ -1,6 +1,6 @@
 {
   "name": "@minion-toolkit/mcp-server",
-  "version": "1.10.0",
+  "version": "2.1.0",
   "description": "MCP server for parallel AI worker orchestration via Anthropic API",
   "type": "module",
   "main": "dist/index.js",
