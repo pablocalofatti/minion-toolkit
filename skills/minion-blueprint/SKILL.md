@@ -34,7 +34,9 @@ Where `{task-slug}` is the task title converted to kebab-case, max 50 chars.
 
 Read the files listed in the task's context files section. If no files are listed, use codegraph_context or Grep to find relevant code. Do NOT start implementing until you understand the existing patterns.
 
-If `PREVIOUS ARTIFACTS` lists any artifact files, read them first — they contain context and decisions from prior workflow phases that should guide your implementation.
+If `PREVIOUS ARTIFACTS` lists any artifact files, read ALL of them — not just the most recent one. They contain context and decisions from prior workflow phases that should guide your implementation. Read them in phase order (e.g., `plan.md` before `implement.md` before `review.md`) to understand the full decision chain. For example, when running a `review` phase, reading the `plan.md` artifact tells you WHY certain design decisions were made, and the `implement.md` artifact tells you WHAT was built.
+
+Additionally, scan the `.minion/{task_slug}/` directory for any artifact files not listed in `PREVIOUS ARTIFACTS` (in case the list is incomplete). Read any `.md` files found there that you haven't already read.
 
 If a file `.minion/learnings.md` exists in the project root, read it. This file contains patterns and fixes from previous minion runs — apply any relevant lessons to avoid repeating past mistakes (e.g., correct import paths, naming conventions, known gotchas).
 

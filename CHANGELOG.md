@@ -1,12 +1,15 @@
 # Changelog
 
-## [1.9.0] - 2026-03-07
+## [2.0.0] - 2026-03-08
 
 ### Added
-- Phase D Tier 2 — resume, TDD default, secure workflow (#30) (`409faf2`)
+- Cross-phase memory — blueprint reads ALL prior artifacts for full decision chain context
+- `--dry-run` flag — preview execution plan (tasks, waves, agents, cost) without spawning workers
+- Worker remediation prompts — interactive options when workers report `stuck`, `blocked`, or `needs_clarification`
+- Post-run report — generates `.minion/report.md` with run metadata, task results, and failure details
 
-### Other
-- v1.8.1 — update changelog and version (#29) (`807d59f`)
+### Changed
+- Blueprint Step 2 now scans `.minion/{task_slug}/` for all artifact files, not just those listed in `PREVIOUS ARTIFACTS`
 
 ## [1.9.0] - 2026-03-07
 

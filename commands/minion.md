@@ -15,6 +15,7 @@ The user's input is in `$ARGUMENTS`.
 - **Parse workflow flag:** Check if `$ARGUMENTS` contains `--workflow {name}`. If present, extract `{name}` as the workflow name and remove the `--workflow {name}` portion from arguments before parsing the task file path. Store the workflow name.
 - **Parse platform flag:** Check if `$ARGUMENTS` contains `--platform {name}`. If present, extract `{name}` as the platform override and remove it from arguments. Store the platform name.
 - **Parse resume flag:** Check if `$ARGUMENTS` contains `--resume`. If present, set `resume_mode = true` and remove `--resume` from arguments. Default: `resume_mode = false`.
+- **Parse dry-run flag:** Check if `$ARGUMENTS` contains `--dry-run`. If present, set `dry_run = true` and remove `--dry-run` from arguments. Default: `dry_run = false`.
 - If no `--workflow` flag, set workflow name to `tdd`.
 - If `$ARGUMENTS` (after flag removal) contains a file path (e.g., `tasks.md`, `speckit/tasks.md`), read that file.
 - If `$ARGUMENTS` is empty after flag removal, look for `speckit/tasks.md` in the current project working directory.
@@ -416,6 +417,13 @@ Display:
 - **Max parallel workers:** `min(task_count, 3)` — this is the default
 - **Bootstrap:** Wave 0 will set up TypeScript strict mode, ESLint, and Vitest _(only shown when bootstrap is needed)_
 
+- **Dry-run exit:** _(only when `dry_run` is `true`)_
+  After displaying the full summary above, print:
+  ```
+  [DRY RUN] Preview complete — no workers spawned.
+  ```
+  Then STOP. Do not ask for confirmation, do not create teams, do not spawn workers. The purpose of `--dry-run` is to let users validate their task file, workflow, wave computation, and agent assignments before committing to a run.
+
 Ask the user with options:
 1. **Yes** — proceed with these settings
 2. **No** — abort
@@ -582,16 +590,39 @@ For each worker report:
      - Use `TaskUpdate` to mark the task as `completed`
      - Print the progress table (showing `?` for this phase)
      - Skip to the next report — do NOT proceed to phase progression
-   - If `STATUS` is `blocked`:
-     - Log: `[{HH:MM:SS}] Task {N} ({title}): {phase} -> BLOCKED`
-     - Print the worker's ERRORS field (the blocker description)
-     - Mark the phase as `blocked` in `status.json`
+   - **Remediation prompt:** After printing the progress table, use `AskUserQuestion` to present the worker's questions and offer options:
+     ```
+     Task {N} ({title}) needs clarification:
+     {questions from the ERRORS field}
+
+     Options:
+     1. Answer questions (I'll provide context and retry this task)
+     2. Skip this task (mark as skipped, continue with others)
+     3. Abort the entire run
+     ```
+     If the user answers (option 1): store the answers as additional context. When all other tasks in the current wave complete, re-spawn this task with the original prompt plus the user's answers appended as "CLARIFICATION: {answers}". Reset its status to `in_progress`.
+     If the user skips (option 2): mark the task as `skipped` via `TaskUpdate`, log `[{HH:MM:SS}] Task {N} ({title}): skipped by user`.
+     If the user aborts (option 3): cancel all running workers, skip to Step 8 with current results.
+   - If `STATUS` is `blocked` or `stuck`:
+     - Log: `[{HH:MM:SS}] Task {N} ({title}): {phase} -> {BLOCKED|STUCK}`
+     - Print the worker's ERRORS field (the blocker/error description)
+     - Mark the phase as `blocked` or `stuck` in `status.json`
      - Mark all remaining phases as `skipped`
      - Use `TaskUpdate` to mark the task as `completed`
      - Print the progress table (showing `!` for this phase)
-     - Skip to the next report
-   - If `STATUS` is `stuck`:
-     - Treat identically to `blocked` — log, print errors, mark `stuck` in status.json, skip remaining phases
+   - **Remediation prompt:** After printing the progress table, use `AskUserQuestion` to present the error and offer options:
+     ```
+     Task {N} ({title}) is {blocked|stuck}:
+     {error details from the ERRORS field}
+
+     Options:
+     1. Retry with more context (I'll provide hints)
+     2. Skip this task
+     3. Abort the entire run
+     ```
+     If the user retries (option 1): ask for hints, then re-spawn the task from the failed phase with the original prompt plus "HINT FROM USER: {hints}" appended. Reset attempt counter.
+     If the user skips (option 2): mark as `skipped`, log it.
+     If the user aborts (option 3): cancel all running workers, skip to Step 8.
 3. Update `.minion/{task_slug}/status.json`:
    - Mark the completed phase's status as `completed` with timestamp
    - If `STATUS` is not `success`, mark remaining phases as `skipped`
@@ -753,6 +784,58 @@ Rules:
 - Create `.minion/learnings.md` if it doesn't exist
 - If the file exceeds 100 lines after appending, remove the oldest `## Run` section(s) until it's under 100 lines
 - Only write entries that contain useful information — skip the learnings step if all tasks succeeded with no lint/test fixes (nothing to learn from)
+
+### Write Post-Run Report
+
+After writing learnings, generate a comprehensive run report at `.minion/report.md`:
+
+````markdown
+# Minion Run Report
+
+## Run Metadata
+- **Date:** {YYYY-MM-DD HH:MM}
+- **Workflow:** {workflow_name} ({phase list with arrows})
+- **Duration:** {total elapsed time from first worker spawn to last report}
+- **Tasks:** {total} total, {succeeded} succeeded, {failed} failed, {skipped} skipped
+
+## Task Results
+
+| # | Task | Status | Branch | Phases | Files Changed |
+|---|------|--------|--------|--------|---------------|
+| 1 | {title} | {status} | {branch} | {phases completed}/{total phases} | {count} |
+| 2 | {title} | {status} | {branch} | {phases completed}/{total phases} | {count} |
+
+## Successful Tasks
+
+{For each successful task:}
+### Task {N}: {title}
+- **Branch:** `{branch-name}`
+- **Files changed:** {comma-separated list}
+- **Summary:** {summary from worker report}
+
+## Failed Tasks
+
+{For each failed task:}
+### Task {N}: {title}
+- **Branch:** `{branch-name}` (preserved for manual fix)
+- **Phase failed:** {phase name}
+- **Status:** {status}
+- **Error:** {error details from worker report}
+
+## Skipped Tasks
+
+{For each skipped task — DONE/SKIP/user-skipped:}
+- Task {N}: {title} — {reason}
+
+## Learnings
+
+{Copy of the learnings entry written above, or "No new learnings — all tasks succeeded cleanly."}
+````
+
+Rules:
+- Overwrite any existing `.minion/report.md` — each run creates a fresh report
+- If `.minion/` directory doesn't exist, this is an error (it should have been created in Step 1.3)
+- The report should be self-contained — a user reading only this file should understand what happened
 
 ## Step 9: Create PRs and Enable Auto-Merge
 

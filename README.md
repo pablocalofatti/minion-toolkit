@@ -170,6 +170,20 @@ If a run is interrupted (context limit, crash, or manual abort), resume where yo
 
 The orchestrator reads `.minion/status.json` files from the previous run to determine which tasks completed, which failed, and which were interrupted mid-phase.
 
+### Previewing a Run
+
+Preview the execution plan without spawning workers:
+
+```bash
+# Dry run — shows tasks, waves, agents, workflow, estimated cost
+/minion --dry-run tasks.md
+
+# Combine with other flags
+/minion --dry-run --workflow full-pipeline tasks.md
+```
+
+The orchestrator parses your task file, resolves dependencies, assigns agents, and displays the full plan — then stops. Use this to validate task files before committing to a run.
+
 ### Custom Workflows
 
 Create `.md` files in `~/.claude/workflows/` or `{project}/.claude/workflows/`:
@@ -282,6 +296,7 @@ Add platform-specific overrides when needed:
 - **Real-time progress** — live dashboard with timestamped updates and summary table during execution
 - **Phase hooks** — run shell commands before/after any workflow phase (lint, notify, validate)
 - **Cyclic workflows** — review-fix loops with configurable iteration limits
+- **Post-run report** — generates `.minion/report.md` with run metadata, per-task results, failure details, and learnings
 
 ## CI/CD Pipeline
 
