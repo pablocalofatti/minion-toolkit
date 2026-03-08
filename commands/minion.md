@@ -590,6 +590,19 @@ For each worker report:
      - Use `TaskUpdate` to mark the task as `completed`
      - Print the progress table (showing `?` for this phase)
      - Skip to the next report — do NOT proceed to phase progression
+   - **Remediation prompt:** After printing the progress table, use `AskUserQuestion` to present the worker's questions and offer options:
+     ```
+     Task {N} ({title}) needs clarification:
+     {questions from the ERRORS field}
+
+     Options:
+     1. Answer questions (I'll provide context and retry this task)
+     2. Skip this task (mark as skipped, continue with others)
+     3. Abort the entire run
+     ```
+     If the user answers (option 1): store the answers as additional context. When all other tasks in the current wave complete, re-spawn this task with the original prompt plus the user's answers appended as "CLARIFICATION: {answers}". Reset its status to `in_progress`.
+     If the user skips (option 2): mark the task as `skipped` via `TaskUpdate`, log `[{HH:MM:SS}] Task {N} ({title}): skipped by user`.
+     If the user aborts (option 3): cancel all running workers, skip to Step 8 with current results.
    - If `STATUS` is `blocked`:
      - Log: `[{HH:MM:SS}] Task {N} ({title}): {phase} -> BLOCKED`
      - Print the worker's ERRORS field (the blocker description)
@@ -600,6 +613,19 @@ For each worker report:
      - Skip to the next report
    - If `STATUS` is `stuck`:
      - Treat identically to `blocked` — log, print errors, mark `stuck` in status.json, skip remaining phases
+   - **Remediation prompt:** After printing the progress table, use `AskUserQuestion` to present the stuck error and offer options:
+     ```
+     Task {N} ({title}) is stuck:
+     {error details from the ERRORS field}
+
+     Options:
+     1. Retry with more context (I'll provide hints)
+     2. Skip this task
+     3. Abort the entire run
+     ```
+     If the user retries (option 1): ask for hints, then re-spawn the task from the failed phase with the original prompt plus "HINT FROM USER: {hints}" appended. Reset attempt counter.
+     If the user skips (option 2): mark as `skipped`, log it.
+     If the user aborts (option 3): cancel all running workers, skip to Step 8.
 3. Update `.minion/{task_slug}/status.json`:
    - Mark the completed phase's status as `completed` with timestamp
    - If `STATUS` is not `success`, mark remaining phases as `skipped`
