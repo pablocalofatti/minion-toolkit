@@ -15,6 +15,7 @@ The user's input is in `$ARGUMENTS`.
 - **Parse workflow flag:** Check if `$ARGUMENTS` contains `--workflow {name}`. If present, extract `{name}` as the workflow name and remove the `--workflow {name}` portion from arguments before parsing the task file path. Store the workflow name.
 - **Parse platform flag:** Check if `$ARGUMENTS` contains `--platform {name}`. If present, extract `{name}` as the platform override and remove it from arguments. Store the platform name.
 - **Parse resume flag:** Check if `$ARGUMENTS` contains `--resume`. If present, set `resume_mode = true` and remove `--resume` from arguments. Default: `resume_mode = false`.
+- **Parse dry-run flag:** Check if `$ARGUMENTS` contains `--dry-run`. If present, set `dry_run = true` and remove `--dry-run` from arguments. Default: `dry_run = false`.
 - If no `--workflow` flag, set workflow name to `tdd`.
 - If `$ARGUMENTS` (after flag removal) contains a file path (e.g., `tasks.md`, `speckit/tasks.md`), read that file.
 - If `$ARGUMENTS` is empty after flag removal, look for `speckit/tasks.md` in the current project working directory.
@@ -415,6 +416,13 @@ Display:
 - **Test command:** the detected command, or "none detected"
 - **Max parallel workers:** `min(task_count, 3)` — this is the default
 - **Bootstrap:** Wave 0 will set up TypeScript strict mode, ESLint, and Vitest _(only shown when bootstrap is needed)_
+
+- **Dry-run exit:** _(only when `dry_run` is `true`)_
+  After displaying the full summary above, print:
+  ```
+  [DRY RUN] Preview complete — no workers spawned.
+  ```
+  Then STOP. Do not ask for confirmation, do not create teams, do not spawn workers. The purpose of `--dry-run` is to let users validate their task file, workflow, wave computation, and agent assignments before committing to a run.
 
 Ask the user with options:
 1. **Yes** — proceed with these settings
