@@ -82,7 +82,7 @@ export async function doctor(): Promise<void> {
   }
 
   // Summary
-  log("\n" + "=".repeat(40));
+  log("\n" + "=".repeat(SEPARATOR_WIDTH));
   if (issues === 0) {
     logSuccess("All checks passed! Minion Toolkit is ready.");
   } else {
