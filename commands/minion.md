@@ -445,6 +445,12 @@ Display:
 - **Lint command:** the detected command, or "none detected"
 - **Test command:** the detected command, or "none detected"
 - **Max parallel workers:** `min(task_count, 3)` — this is the default
+- **Estimated cost:** Compute a rough cost estimate using this heuristic:
+  - Per task: `phases × avg_iterations_per_phase × avg_tokens_per_iteration × model_rate`
+  - Defaults: `avg_iterations_per_phase = 8`, `avg_tokens_per_iteration = 4000`, `model_rate = $3/$15 per 1M input/output tokens` (Sonnet pricing)
+  - Total: sum across all tasks
+  - Display as: `Estimated cost: ~${total} (based on {task_count} tasks × {phase_count} phases at Sonnet rates)`
+  - This is a rough heuristic — actual cost depends on task complexity, fix cycles, and model used
 - **Bootstrap:** Wave 0 will set up TypeScript strict mode, ESLint, and Vitest _(only shown when bootstrap is needed)_
 
 - **Dry-run exit:** _(only when `dry_run` is `true`)_
@@ -764,7 +770,8 @@ When creating or updating `.minion/{task_slug}/status.json`, write the full JSON
       "artifact": "{artifact_path or null}",
       "cycle_count": "{integer, only present on cycle target phases, default 0}",
       "started_at": "{ISO timestamp or null}",
-      "completed_at": "{ISO timestamp or null}"
+      "completed_at": "{ISO timestamp or null}",
+      "iterations": "{integer, approximate agent turns consumed in this phase, default 0}"
     }
   },
   "branch": "{branch_name}",
@@ -773,6 +780,8 @@ When creating or updating `.minion/{task_slug}/status.json`, write the full JSON
 ```
 
 Initialize `status.json` when the first phase starts (Step 6 — set all phases to `pending`, first phase to `in_progress`). Update it on each phase completion (this step).
+
+When updating a phase to `completed`, set `iterations` to the approximate number of agent turns consumed during that phase. This is used for post-run cost estimation. If the exact count is not available, estimate based on the worker's report (e.g., a `success` with no lint/test fixes ≈ 10 iterations, with 1 fix cycle ≈ 15, with 2 fix cycles ≈ 20).
 
 For cycle target phases, initialize `cycle_count` to `0`. Increment it each time the cycle resets (Case C in Step 7). Non-cycle phases do not have a `cycle_count` field.
 
@@ -860,6 +869,18 @@ After writing learnings, generate a comprehensive run report at `.minion/report.
 ## Learnings
 
 {Copy of the learnings entry written above, or "No new learnings — all tasks succeeded cleanly."}
+
+## Cost Summary
+- **Model:** Sonnet (default) — adjust rates if workers used a different model
+- **Rate:** $3/1M input tokens, $15/1M output tokens
+
+| # | Task | Phases | Iterations | Est. Tokens | Est. Cost |
+|---|------|--------|------------|-------------|-----------|
+| 1 | {title} | {completed}/{total} | {sum of iterations across phases} | {iterations × 4000} | ~${cost} |
+| 2 | {title} | {completed}/{total} | {sum of iterations across phases} | {iterations × 4000} | ~${cost} |
+| **Total** | | | {total_iterations} | {total_tokens} | **~${total_cost}** |
+
+_Cost estimates are approximate. Actual costs depend on prompt length, response length, and model used. Token estimate uses 4000 tokens/iteration average._
 ````
 
 Rules:

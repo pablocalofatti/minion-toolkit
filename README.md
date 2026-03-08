@@ -299,6 +299,7 @@ Add platform-specific overrides when needed:
 - **Post-run report** — generates `.minion/report.md` with run metadata, per-task results, failure details, and learnings
 - **Conflict prevention** — detects file overlap between parallel tasks and offers auto-serialization to prevent merge conflicts
 - **Smart context gathering** — workers auto-discover related code via codegraph or grep before implementing (max 5 queries)
+- **Cost tracking** — pre-run cost estimates and post-run approximate cost per task in the report
 
 ## CI/CD Pipeline
 
