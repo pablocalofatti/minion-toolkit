@@ -40,6 +40,31 @@ Additionally, scan the `.minion/{task_slug}/` directory for any artifact files n
 
 If a file `.minion/learnings.md` exists in the project root, read it. This file contains patterns and fixes from previous minion runs — apply any relevant lessons to avoid repeating past mistakes (e.g., correct import paths, naming conventions, known gotchas).
 
+**Step 2b: Gather related code** [DETERMINISTIC — max 5 queries]
+
+After reading declared files and artifacts, proactively gather related code to avoid hallucinating import paths or missing existing patterns:
+
+1. **Extract key terms** from the task description: function names, type names, module names, file paths mentioned but not in the context files list.
+
+2. **If codegraph tools are available** (check if `codegraph_search` tool exists):
+   - Use `codegraph_search` for each key term (up to 3 queries)
+   - Use `codegraph_context` with the task description (1 query)
+   - Read the source of any highly relevant results with `codegraph_node`
+   - Priority: semantic search finds related code even with different naming
+
+3. **If codegraph is NOT available:**
+   - Use `Grep` to search for key terms in the project (up to 5 queries)
+   - Focus on: import/export statements, type definitions, function signatures
+   - Limit search scope to `src/`, `lib/`, `app/` directories to avoid noise
+
+4. **Cap:** Maximum 5 total queries across codegraph and grep combined. Do not rabbit-hole. The goal is to understand existing patterns, not to map the entire codebase.
+
+5. **What to look for:**
+   - Existing functions/types you might reuse (don't reinvent)
+   - Import paths and module structure (use correct paths)
+   - Naming conventions (match existing style)
+   - Test patterns (if writing tests, match existing test style)
+
 ### Step 3: Implement [AGENTIC — max 25 turns]
 
 Implement the task. Follow all rules from CLAUDE.md and project conventions. Write clean, minimal code. Do not over-engineer.
