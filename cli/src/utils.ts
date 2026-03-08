@@ -9,8 +9,6 @@ const execFileAsync = promisify(execFile);
 export const CLAUDE_DIR = join(homedir(), ".claude");
 export const SEPARATOR_WIDTH = 40;
 
-export const SEPARATOR_WIDTH = 40;
-
 export const ASSET_DIRS = {
   commands: join(CLAUDE_DIR, "commands"),
   agents: join(CLAUDE_DIR, "agents"),
