@@ -211,6 +211,22 @@ If no dependencies exist, all tasks form a single wave (same as v1 behavior).
 
 Store the computed waves, critical path, and wave count for the confirmation step.
 
+## Step 1.6: Conflict Analysis
+
+Detect file-level overlap between tasks in the same wave to prevent merge conflicts.
+
+1. **Build file-overlap matrix:** For each wave, compare the `Files:` field of every task pair in that wave. Two tasks overlap if they share any file path (exact match after trimming whitespace).
+
+2. **If no tasks have `Files:` fields:** Skip conflict analysis entirely. Log: `[{HH:MM:SS}] Conflict analysis skipped — no tasks declare Files: fields`. Tasks without `Files:` fields cannot be analyzed for overlap.
+
+3. **If overlaps found:** For each conflicting pair, log:
+   ```
+   [HH:MM:SS] ⚠ Conflict: Task {A} and Task {B} both modify {file1, file2, ...}
+   ```
+   Store the conflicts for the confirmation step (Step 3).
+
+4. **Resolution options:** _(deferred to Step 3 confirmation — see below)_
+
 ## Step 1.7: Discover Available Agents
 
 Scan for agent definitions to build a registry of available specialized workers. This enables team-aware task assignment — specialized agents handle tasks in their domain instead of the generic `minion-worker`.
@@ -412,6 +428,20 @@ Display:
 - **Tasks skipped:** count of `[DONE]`/`[SKIP]` tasks, if any
 - **Execution waves:** show wave breakdown if dependencies exist (e.g., "Wave 1: Tasks 1, 2 | Wave 2: Tasks 3, 4")
 - **Critical path:** the longest dependency chain (e.g., "Task 1 → Task 3 → Task 5")
+- **Conflict warnings:** _(only shown when Step 1.6 found overlaps)_
+  ```
+  ⚠ File conflicts detected:
+    - Task 1 (Add validation) ↔ Task 3 (Update models): src/models.ts, src/types.ts
+    - Task 2 (Fix pagination) ↔ Task 4 (Add search): src/api/routes.ts
+  ```
+  After displaying conflicts, offer resolution options:
+  1. **Auto-serialize** — inject a synthetic `Depends:` edge between the conflicting pair so they run in sequential waves. Recompute waves with the new dependency. This preserves parallelism for all non-conflicting tasks.
+  2. **Proceed anyway** — user accepts merge conflict risk and will resolve manually
+  3. **Abort** — stop the run so user can edit the task file
+
+  If multiple conflicts exist, apply option 1 to all conflicting pairs (not one at a time). After auto-serializing, re-display the updated wave breakdown.
+
+  In `--dry-run` mode, display conflict warnings but do not prompt for resolution (information only).
 - **Lint command:** the detected command, or "none detected"
 - **Test command:** the detected command, or "none detected"
 - **Max parallel workers:** `min(task_count, 3)` — this is the default

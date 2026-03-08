@@ -297,6 +297,7 @@ Add platform-specific overrides when needed:
 - **Phase hooks** — run shell commands before/after any workflow phase (lint, notify, validate)
 - **Cyclic workflows** — review-fix loops with configurable iteration limits
 - **Post-run report** — generates `.minion/report.md` with run metadata, per-task results, failure details, and learnings
+- **Conflict prevention** — detects file overlap between parallel tasks and offers auto-serialization to prevent merge conflicts
 
 ## CI/CD Pipeline
 
