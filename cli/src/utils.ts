@@ -33,11 +33,12 @@ export async function runCommand(
     const err = error as NodeJS.ErrnoException & {
       stdout?: string;
       stderr?: string;
+      status?: number | null;
     };
     return {
       stdout: (err.stdout ?? "").trim(),
       stderr: (err.stderr ?? "").trim(),
-      exitCode: typeof err.code === "number" ? err.code : 1,
+      exitCode: err.status ?? 1,
     };
   }
 }
