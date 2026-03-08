@@ -1,5 +1,16 @@
 # Changelog
 
+## [2.0.0] - 2026-03-08
+
+### Added
+- Cross-phase memory — blueprint reads ALL prior artifacts for full decision chain context
+- `--dry-run` flag — preview execution plan (tasks, waves, agents, cost) without spawning workers
+- Worker remediation prompts — interactive options when workers report `stuck`, `blocked`, or `needs_clarification`
+- Post-run report — generates `.minion/report.md` with run metadata, task results, and failure details
+
+### Changed
+- Blueprint Step 2 now scans `.minion/{task_slug}/` for all artifact files, not just those listed in `PREVIOUS ARTIFACTS`
+
 ## [1.9.0] - 2026-03-07
 
 ### Added
