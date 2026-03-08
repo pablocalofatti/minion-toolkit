@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.10.0] - 2026-03-08
+
+### Added
+- Phase E — cross-phase memory, dry-run, health monitoring, post-run report (#32) (`995444f`)
+
+### Other
+- v1.9.0 — update changelog and version (#31) (`18be948`)
+
 ## [2.0.0] - 2026-03-08
 
 ### Added
