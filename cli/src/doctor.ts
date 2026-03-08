@@ -27,14 +27,9 @@ const REQUIRED_FILES = [
 
 const REQUIRED_PLUGINS = ["superpowers", "code-review"];
 
-export async function doctor(): Promise<void> {
-  log("Minion Toolkit Health Check");
-  log("=".repeat(SEPARATOR_WIDTH));
-
-  let issues = 0;
-
-  // Check core files
+function checkCoreFiles(): number {
   log("\nCore files:");
+  let issues = 0;
   for (const file of REQUIRED_FILES) {
     if (existsSync(file.path)) {
       logSuccess(file.label);
@@ -44,16 +39,18 @@ export async function doctor(): Promise<void> {
     }
   }
 
-  // Check workflows directory
   const workflowDir = join(CLAUDE_DIR, "workflows");
   if (existsSync(workflowDir)) {
     logSuccess("Workflow templates (workflows/)");
   } else {
     logWarn("Workflow templates — not found (optional)");
   }
+  return issues;
+}
 
-  // Check plugins
+async function checkPlugins(): Promise<number> {
   log("\nPlugins:");
+  let issues = 0;
   const { stdout: pluginList } = await runCommand("claude", [
     "plugin",
     "list",
@@ -68,20 +65,31 @@ export async function doctor(): Promise<void> {
       issues++;
     }
   }
+  return issues;
+}
 
-  // Check codegraph
+async function checkTools(): Promise<number> {
   log("\nTools:");
   const { exitCode: cgCode } = await runCommand("codegraph", ["--version"]);
   if (cgCode === 0) {
     logSuccess("codegraph");
-  } else {
-    logWarn(
-      "codegraph — not installed (run: npm install -g @anthropic-ai/codegraph)"
-    );
-    issues++;
+    return 0;
   }
+  logWarn(
+    "codegraph — not installed (run: npm install -g @anthropic-ai/codegraph)"
+  );
+  return 1;
+}
 
-  // Summary
+export async function doctor(): Promise<void> {
+  log("Minion Toolkit Health Check");
+  log("=".repeat(SEPARATOR_WIDTH));
+
+  const issues =
+    checkCoreFiles() +
+    (await checkPlugins()) +
+    (await checkTools());
+
   log("\n" + "=".repeat(SEPARATOR_WIDTH));
   if (issues === 0) {
     logSuccess("All checks passed! Minion Toolkit is ready.");

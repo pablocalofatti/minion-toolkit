@@ -30,11 +30,14 @@ export async function runCommand(
     const { stdout, stderr } = await execFileAsync(cmd, args);
     return { stdout: stdout.trim(), stderr: stderr.trim(), exitCode: 0 };
   } catch (error: unknown) {
-    const err = error as { stdout?: string; stderr?: string; code?: number };
+    const err = error as NodeJS.ErrnoException & {
+      stdout?: string;
+      stderr?: string;
+    };
     return {
       stdout: (err.stdout ?? "").trim(),
       stderr: (err.stderr ?? "").trim(),
-      exitCode: err.code ?? 1,
+      exitCode: typeof err.code === "number" ? err.code : 1,
     };
   }
 }

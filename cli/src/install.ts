@@ -63,14 +63,14 @@ const PLUGINS: PluginDef[] = [
   },
 ];
 
-async function copyAssets(): Promise<void> {
-  log("\nStep 1: Copying core files to ~/.claude/...");
+interface CopyEntry {
+  src: string;
+  dest: string;
+  label: string;
+}
 
-  for (const dir of Object.values(ASSET_DIRS)) {
-    ensureDir(dir);
-  }
-
-  const copies: Array<{ src: string; dest: string; label: string }> = [
+function buildCopiesList(): CopyEntry[] {
+  const copies: CopyEntry[] = [
     {
       src: join(ASSETS_DIR, "commands", "minion.md"),
       dest: join(ASSET_DIRS.commands, "minion.md"),
@@ -93,7 +93,6 @@ async function copyAssets(): Promise<void> {
     },
   ];
 
-  // Copy workflow files
   const workflowsDir = join(ASSETS_DIR, "workflows");
   if (existsSync(workflowsDir)) {
     const workflowDir = join(CLAUDE_DIR, "workflows");
@@ -109,7 +108,17 @@ async function copyAssets(): Promise<void> {
     }
   }
 
-  for (const { src, dest, label } of copies) {
+  return copies;
+}
+
+function copyAssets(): void {
+  log("\nStep 1: Copying core files to ~/.claude/...");
+
+  for (const dir of Object.values(ASSET_DIRS)) {
+    ensureDir(dir);
+  }
+
+  for (const { src, dest, label } of buildCopiesList()) {
     if (existsSync(src)) {
       cpSync(src, dest);
       logSuccess(label);
@@ -119,13 +128,8 @@ async function copyAssets(): Promise<void> {
   }
 }
 
-async function installPlugins(): Promise<void> {
-  const essential = PLUGINS.filter((p) => p.essential);
-  const recommended = PLUGINS.filter((p) => !p.essential);
-
-  log("\nStep 2: Installing essential plugins and tools...");
-
-  for (const plugin of essential) {
+async function installPluginList(plugins: PluginDef[]): Promise<void> {
+  for (const plugin of plugins) {
     log(`  Installing ${plugin.name}...`);
     const result = await runCommand(
       plugin.installCmd[0],
@@ -139,6 +143,14 @@ async function installPlugins(): Promise<void> {
       );
     }
   }
+}
+
+async function installPlugins(): Promise<void> {
+  const essential = PLUGINS.filter((p) => p.essential);
+  const recommended = PLUGINS.filter((p) => !p.essential);
+
+  log("\nStep 2: Installing essential plugins and tools...");
+  await installPluginList(essential);
 
   log("\nStep 3: Recommended plugins (optional):");
   for (const plugin of recommended) {
@@ -150,18 +162,7 @@ async function installPlugins(): Promise<void> {
   rl.close();
 
   if (answer.toLowerCase() === "y") {
-    for (const plugin of recommended) {
-      log(`  Installing ${plugin.name}...`);
-      const result = await runCommand(
-        plugin.installCmd[0],
-        plugin.installCmd.slice(1)
-      );
-      if (result.exitCode === 0) {
-        logSuccess(plugin.name);
-      } else {
-        logWarn(`${plugin.name} — install failed. Install manually later.`);
-      }
-    }
+    await installPluginList(recommended);
   } else {
     log("  Skipped recommended plugins.");
   }
@@ -171,7 +172,7 @@ export async function install(): Promise<void> {
   log("Minion Toolkit Installer");
   log("=".repeat(SEPARATOR_WIDTH));
 
-  await copyAssets();
+  copyAssets();
   await installPlugins();
 
   log("\nInstallation complete!");

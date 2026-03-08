@@ -169,7 +169,11 @@ jobs:
           # Build and publish
           npm install --ignore-scripts
           npm run build
-          npm publish --access public || echo "Publish skipped — NPM_TOKEN may not be configured"
+          if [ -z "$NODE_AUTH_TOKEN" ]; then
+            echo "Publish skipped — NPM_TOKEN not configured"
+          else
+            npm publish --access public
+          fi
 
       - name: Update CHANGELOG.md and package.json via PR
         if: steps.bump.outputs.skip != 'true'
