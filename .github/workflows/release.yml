@@ -35,6 +35,7 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: 22
+          registry-url: "https://registry.npmjs.org"
 
       - name: Determine version bump
         id: bump
@@ -149,6 +150,30 @@ jobs:
             --notes-file /tmp/release-notes.md
         env:
           GH_TOKEN: ${{ secrets.RELEASE_TOKEN }}
+
+      - name: Publish CLI to npm
+        if: steps.bump.outputs.skip != 'true'
+        working-directory: cli
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: |
+          # Sync version from mcp-server/package.json
+          VERSION=$(node -p "require('../mcp-server/package.json').version")
+          node -e "
+            const fs = require('fs');
+            const pkg = JSON.parse(fs.readFileSync('package.json', 'utf8'));
+            pkg.version = '$VERSION';
+            fs.writeFileSync('package.json', JSON.stringify(pkg, null, 2) + '\n');
+          "
+
+          # Build and publish
+          npm install --ignore-scripts
+          npm run build
+          if [ -z "$NODE_AUTH_TOKEN" ]; then
+            echo "Publish skipped — NPM_TOKEN not configured"
+          else
+            npm publish --access public
+          fi
 
       - name: Update CHANGELOG.md and package.json via PR
         if: steps.bump.outputs.skip != 'true'

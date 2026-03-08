@@ -1,5 +1,18 @@
 # Changelog
 
+## [2.2.0] - 2026-03-08
+
+### Added
+- Optional MCP delegation — orchestrator uses MCP tools for parsing, DAG, scope check, and cost when available
+- CLI installer (`npx minion-toolkit install`) — copies files, installs plugins/tools, offers recommended plugins
+- Agent auto-generator (`npx minion-toolkit agents`) — scans project structure and generates tailored agent files
+- Doctor command (`npx minion-toolkit doctor`) — verifies installation health
+- Uninstall and update commands for clean lifecycle management
+- npm publish in release workflow for CLI distribution
+
+### Changed
+- README restructured with Installation section as primary entry point
+
 ## [1.11.0] - 2026-03-08
 
 ### Added

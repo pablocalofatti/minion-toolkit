@@ -1,0 +1,41 @@
+{
+  "name": "minion-toolkit",
+  "version": "2.2.0",
+  "description": "CLI installer for minion-toolkit — parallel AI worker orchestration for Claude Code",
+  "type": "module",
+  "main": "dist/index.js",
+  "bin": {
+    "minion-toolkit": "dist/index.js"
+  },
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsc --watch",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "commander": "^13.0.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "typescript": "^5.7.0"
+  },
+  "engines": {
+    "node": ">=20.0.0"
+  },
+  "files": [
+    "dist",
+    "assets"
+  ],
+  "keywords": [
+    "claude-code",
+    "ai",
+    "orchestration",
+    "minion",
+    "parallel-workers"
+  ],
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/pablocalofatti/minion-toolkit.git"
+  }
+}

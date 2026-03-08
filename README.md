@@ -37,7 +37,27 @@ gh auth status   # Optional: GitHub CLI authenticated
 
 ## Installation
 
-### As a Claude Code plugin (recommended)
+### Automatic (recommended)
+
+```bash
+npx minion-toolkit install
+```
+
+This will:
+1. Copy orchestrator, worker, blueprint, and workflow files to `~/.claude/`
+2. Install essential plugins (superpowers, code-review) and tools (codegraph)
+3. Offer optional recommended plugins (pr-review-toolkit, context7, security-guidance)
+
+### Other Commands
+
+```bash
+npx minion-toolkit agents     # Auto-generate agents from project structure
+npx minion-toolkit doctor     # Verify installation health
+npx minion-toolkit update     # Update to latest version
+npx minion-toolkit uninstall  # Clean removal
+```
+
+### Manual (plugin mode)
 
 ```bash
 # Clone the repo
@@ -47,9 +67,9 @@ git clone https://github.com/pablocalofatti/minion-toolkit.git
 claude --plugin-dir /path/to/minion-toolkit
 ```
 
-### MCP server setup
+### MCP server setup (optional)
 
-The toolkit includes an MCP server for programmatic orchestration via the [Model Context Protocol](https://modelcontextprotocol.io/).
+The toolkit includes an MCP server for programmatic orchestration via the [Model Context Protocol](https://modelcontextprotocol.io/). When available, the orchestrator automatically delegates task parsing, DAG resolution, scope checking, and cost estimation to the MCP server for more reliable results.
 
 ```bash
 cd minion-toolkit/mcp-server
@@ -74,14 +94,12 @@ Add to your Claude Code MCP config (`~/.claude/mcp_servers.json`):
 ### Verify installation
 
 ```bash
-# Start Claude Code with the plugin
-claude --plugin-dir /path/to/minion-toolkit
+# Run the doctor command
+npx minion-toolkit doctor
 
-# Run the minion command
+# Or if using plugin mode
 /minion-toolkit:minion examples/sample-tasks.md
 ```
-
-You should see the orchestrator parse 2 tasks, detect lint/test commands, and ask for confirmation before spawning workers.
 
 ## Usage
 
@@ -312,7 +330,9 @@ This repository includes a fully automated CI/CD pipeline:
 | **Auto-Fix CI** | CI failure on PR | Claude reads error logs, fixes code, commits, pushes |
 | **Auto-Fix Review** | Review comments on PR | Claude addresses review feedback, replies, pushes |
 | **PR Gate** | PRs opened/updated | Auto-passes for trusted authors; external PRs need owner approval |
-| **Release** | Push to main | Auto-bumps version (semver), creates GitHub Release + changelog PR |
+| **Release** | Push to main | Auto-bumps version (semver), creates GitHub Release + changelog PR + npm publish |
+
+**npm Publishing:** The release workflow also publishes the `minion-toolkit` CLI to npm. Requires `NPM_TOKEN` secret in repository settings. If not configured, the publish step is skipped gracefully.
 
 ## Examples
 
