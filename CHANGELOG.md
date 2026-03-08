@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.12.0] - 2026-03-08
+
+### Added
+- Phase G — MCP delegation + CLI installer (#36) (`5866085`)
+
+### Other
+- v1.11.0 — update changelog and version (#35) (`2e67529`)
+
 ## [2.2.0] - 2026-03-08
 
 ### Added
