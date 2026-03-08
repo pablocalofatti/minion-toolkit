@@ -14,14 +14,6 @@
 ## [1.9.0] - 2026-03-07
 
 ### Added
-- Phase D Tier 2 — resume, TDD default, secure workflow (#30) (`409faf2`)
-
-### Other
-- v1.8.1 — update changelog and version (#29) (`807d59f`)
-
-## [1.9.0] - 2026-03-07
-
-### Added
 - `--resume` flag for interrupted run recovery — skips completed tasks, retries failures, continues interrupted phases
 - Security review workflow (`secure`) with dedicated `security-reviewer` agent (OWASP Top 10)
 - `agents/security-reviewer.md` — security-focused code reviewer (injection, credentials, auth bypass, SSRF)

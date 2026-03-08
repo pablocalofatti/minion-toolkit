@@ -603,19 +603,16 @@ For each worker report:
      If the user answers (option 1): store the answers as additional context. When all other tasks in the current wave complete, re-spawn this task with the original prompt plus the user's answers appended as "CLARIFICATION: {answers}". Reset its status to `in_progress`.
      If the user skips (option 2): mark the task as `skipped` via `TaskUpdate`, log `[{HH:MM:SS}] Task {N} ({title}): skipped by user`.
      If the user aborts (option 3): cancel all running workers, skip to Step 8 with current results.
-   - If `STATUS` is `blocked`:
-     - Log: `[{HH:MM:SS}] Task {N} ({title}): {phase} -> BLOCKED`
-     - Print the worker's ERRORS field (the blocker description)
-     - Mark the phase as `blocked` in `status.json`
+   - If `STATUS` is `blocked` or `stuck`:
+     - Log: `[{HH:MM:SS}] Task {N} ({title}): {phase} -> {BLOCKED|STUCK}`
+     - Print the worker's ERRORS field (the blocker/error description)
+     - Mark the phase as `blocked` or `stuck` in `status.json`
      - Mark all remaining phases as `skipped`
      - Use `TaskUpdate` to mark the task as `completed`
      - Print the progress table (showing `!` for this phase)
-     - Skip to the next report
-   - If `STATUS` is `stuck`:
-     - Treat identically to `blocked` — log, print errors, mark `stuck` in status.json, skip remaining phases
-   - **Remediation prompt:** After printing the progress table, use `AskUserQuestion` to present the stuck error and offer options:
+   - **Remediation prompt:** After printing the progress table, use `AskUserQuestion` to present the error and offer options:
      ```
-     Task {N} ({title}) is stuck:
+     Task {N} ({title}) is {blocked|stuck}:
      {error details from the ERRORS field}
 
      Options:
