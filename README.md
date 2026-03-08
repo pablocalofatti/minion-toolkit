@@ -37,27 +37,7 @@ gh auth status   # Optional: GitHub CLI authenticated
 
 ## Installation
 
-### Automatic (recommended)
-
-```bash
-npx minion-toolkit install
-```
-
-This will:
-1. Copy orchestrator, worker, blueprint, and workflow files to `~/.claude/`
-2. Install essential plugins (superpowers, code-review) and tools (codegraph)
-3. Offer optional recommended plugins (pr-review-toolkit, context7, security-guidance)
-
-### Other Commands
-
-```bash
-npx minion-toolkit agents     # Auto-generate agents from project structure
-npx minion-toolkit doctor     # Verify installation health
-npx minion-toolkit update     # Update to latest version
-npx minion-toolkit uninstall  # Clean removal
-```
-
-### Manual (plugin mode)
+### As a Claude Code plugin (recommended)
 
 ```bash
 # Clone the repo
@@ -67,9 +47,9 @@ git clone https://github.com/pablocalofatti/minion-toolkit.git
 claude --plugin-dir /path/to/minion-toolkit
 ```
 
-### MCP server setup (optional)
+### MCP server setup
 
-The toolkit includes an MCP server for programmatic orchestration via the [Model Context Protocol](https://modelcontextprotocol.io/). When available, the orchestrator automatically delegates task parsing, DAG resolution, scope checking, and cost estimation to the MCP server for more reliable results.
+The toolkit includes an MCP server for programmatic orchestration via the [Model Context Protocol](https://modelcontextprotocol.io/).
 
 ```bash
 cd minion-toolkit/mcp-server
@@ -94,12 +74,14 @@ Add to your Claude Code MCP config (`~/.claude/mcp_servers.json`):
 ### Verify installation
 
 ```bash
-# Run the doctor command
-npx minion-toolkit doctor
+# Start Claude Code with the plugin
+claude --plugin-dir /path/to/minion-toolkit
 
-# Or if using plugin mode
+# Run the minion command
 /minion-toolkit:minion examples/sample-tasks.md
 ```
+
+You should see the orchestrator parse 2 tasks, detect lint/test commands, and ask for confirmation before spawning workers.
 
 ## Usage
 
@@ -158,7 +140,7 @@ Workflows define the phase sequence for task execution. Use `--workflow` to sele
 | Workflow | Phases | Use Case |
 |----------|--------|----------|
 | `default` | implement → review | Lightweight — skip planning, just build and review |
-| `tdd` | plan → implement → review | **Default** — plan first, then TDD, then review |
+| `tdd` | plan → implement → review | Plan first, then TDD, then review |
 | `quick` | implement | Fast prototyping, no review |
 | `full-pipeline` | plan → implement → review ⇄ fix | Maximum quality with review-fix cycle (up to 3 iterations) |
 | `ci-checked` | implement → review | With CI hooks: tests after implement, lint before review |
@@ -279,6 +261,60 @@ Add platform-specific overrides when needed:
   - opencode: @plan
 ```
 
+## Smart Workflow Selection
+
+When no `--workflow` flag is provided, Minion auto-selects the best workflow based on your tasks (first match wins):
+
+| Condition | Workflow | Reason |
+|-----------|----------|--------|
+| Security keywords detected (auth, OWASP, injection, etc.) | `secure` | Tasks touching security need a security audit phase |
+| Single task, ≤3 files, no dependencies | `quick` | Simple tasks don't need planning or review overhead |
+| Test/TDD keywords, dependencies, or ≥3 tasks | `tdd` | Complex work benefits from plan → implement → review |
+| Everything else | `default` | Lightweight implement → review |
+
+The selection reason is shown in the confirmation step. Override with `--workflow <name>`.
+
+## Intent Capture
+
+On the first run (no `--resume`, no `--dry-run`), Minion asks two questions:
+
+1. **"What's the goal of this run?"** — captures the high-level objective
+2. **"What does success look like?"** — captures measurable success criteria
+
+Answers are saved to `.minion/intent.md`. Review phases automatically reference this file to evaluate whether implementations align with the stated goal. The post-run report includes an intent alignment assessment.
+
+## Domain Agents
+
+Pre-built agents with scored auto-detection. Each agent has a `matches` field in its YAML frontmatter with `extensions`, `paths`, and `keywords` arrays:
+
+| Agent | Matches | Focus |
+|-------|---------|-------|
+| `backend-architect` | `.service.ts`, `.controller.ts`, `services/`, "API", "NestJS" | API design, DB schema, service layer, auth |
+| `frontend-architect` | `.tsx`, `.jsx`, `.css`, `components/`, "React", "UI" | Component composition, state management, accessibility |
+| `devops-engineer` | `.yml`, `Dockerfile`, `.tf`, `.github/`, "CI/CD", "Docker" | Pipelines, containers, IaC, secrets |
+| `data-engineer` | `.sql`, `.prisma`, `migrations/`, "schema", "query" | Schema design, migrations, query optimization |
+| `tech-writer` | `.md`, `.mdx`, `docs/`, "documentation", "README" | API docs, ADRs, guides |
+
+**Scoring:** extension match = 3pts, path match = 2pts, keyword match = 1pt. Highest score wins (minimum 1 to qualify). Create custom agents in `{project}/.claude/agents/` or `~/.claude/agents/`.
+
+## Role Overlays
+
+Role overlays are phase-specific behavioral prompts that shape HOW workers approach tasks, independent of their domain expertise. While domain agents define WHAT to focus on, role overlays define the methodology:
+
+| Role | Phases | Behavior |
+|------|--------|----------|
+| `researcher` | plan | Research mode — map dependencies, identify risks, propose approaches. No code changes. |
+| `tdd-developer` | implement | Test-first — write failing tests → minimal implementation → tests pass. |
+| `code-reviewer` | review | Quality checklist — correctness, coverage, code quality, CLAUDE.md standards. |
+| `security-auditor` | security-review | Security audit — OWASP Top 10, rate findings CRITICAL/HIGH/MEDIUM/LOW. |
+| `performance-reviewer` | review (perf) | Performance review — complexity, N+1 queries, memory leaks, I/O. |
+
+Workflows `tdd`, `full-pipeline`, and `secure` have `- Role:` fields pre-configured per phase. Create custom roles in `{project}/.claude/roles/` or `~/.claude/roles/`.
+
+## Stall Detection
+
+In cyclic workflows (e.g., `full-pipeline` with review-fix loops), Minion detects when a fix phase makes no actual changes by comparing `git rev-parse HEAD` before and after the fix worker runs. If the SHA is unchanged, the cycle exits early instead of looping back to review — preventing infinite loops when a worker can't resolve the review feedback.
+
 ## Architecture
 
 ```
@@ -318,6 +354,11 @@ Add platform-specific overrides when needed:
 - **Conflict prevention** — detects file overlap between parallel tasks and offers auto-serialization to prevent merge conflicts
 - **Smart context gathering** — workers auto-discover related code via codegraph or grep before implementing (max 5 queries)
 - **Cost tracking** — pre-run cost estimates and post-run approximate cost per task in the report
+- **Intent capture** — asks goal and success criteria on first run, saves to `.minion/intent.md` for review phases to validate against
+- **Smart workflow selection** — auto-selects the best workflow based on task complexity, security keywords, and dependency graph
+- **Stall detection** — detects stuck review-fix cycles via git SHA comparison and exits early to prevent infinite loops
+- **Domain agents** — pre-built agents (backend, frontend, devops, data, tech-writer) with scored auto-matching via YAML frontmatter
+- **Role overlays** — phase-specific behavioral prompts (researcher, tdd-developer, code-reviewer, security-auditor, performance-reviewer) that shape worker approach
 
 ## CI/CD Pipeline
 
@@ -330,9 +371,7 @@ This repository includes a fully automated CI/CD pipeline:
 | **Auto-Fix CI** | CI failure on PR | Claude reads error logs, fixes code, commits, pushes |
 | **Auto-Fix Review** | Review comments on PR | Claude addresses review feedback, replies, pushes |
 | **PR Gate** | PRs opened/updated | Auto-passes for trusted authors; external PRs need owner approval |
-| **Release** | Push to main | Auto-bumps version (semver), creates GitHub Release + changelog PR + npm publish |
-
-**npm Publishing:** The release workflow also publishes the `minion-toolkit` CLI to npm. Requires `NPM_TOKEN` secret in repository settings. If not configured, the publish step is skipped gracefully.
+| **Release** | Push to main | Auto-bumps version (semver), creates GitHub Release + changelog PR |
 
 ## Examples
 

@@ -13,6 +13,7 @@ platforms:
 
 ## Phase: plan
 - Prompt: "Create a detailed implementation plan. Identify architecture decisions, files to create/modify, edge cases, and test strategy: {task}"
+- Role: researcher
 - Artifact: .minion/{task_slug}/plan.md
 - Agent: minion-worker
 - Gate: artifact
@@ -22,6 +23,7 @@ platforms:
 
 ## Phase: implement
 - Prompt: "Implement following the plan from the previous phase. Write comprehensive tests: {task}"
+- Role: tdd-developer
 - Artifact: .minion/{task_slug}/implement.md
 - Agent: minion-worker
 - Gate: artifact
@@ -30,6 +32,7 @@ platforms:
 
 ## Phase: review
 - Prompt: "Review the implementation for quality, correctness, test coverage, security, and adherence to coding standards: {task}"
+- Role: code-reviewer
 - Artifact: .minion/{task_slug}/review.md
 - Agent: code-quality
 - Gate: artifact

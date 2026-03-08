@@ -11,6 +11,7 @@ platforms:
 
 ## Phase: plan
 - Prompt: "Analyze the task and create a brief implementation plan. Identify files to create/modify, approach, and test strategy. Consider security implications: {task}"
+- Role: researcher
 - Artifact: .minion/{task_slug}/plan.md
 - Agent: minion-worker
 - Gate: artifact
@@ -19,6 +20,7 @@ platforms:
 
 ## Phase: implement
 - Prompt: "Implement the following task with TDD. Write failing tests first, then minimal implementation. Follow all project conventions from CLAUDE.md: {task}"
+- Role: tdd-developer
 - Artifact: .minion/{task_slug}/implement.md
 - Agent: minion-worker
 - Gate: artifact
@@ -27,6 +29,7 @@ platforms:
 
 ## Phase: security-review
 - Prompt: "Perform a security audit of the implementation for task: {task}. Check for injection, credential exposure, unsafe input handling, missing validation, and OWASP Top 10 vulnerabilities. Only report security issues — skip code style and architecture feedback."
+- Role: security-auditor
 - Artifact: .minion/{task_slug}/security-review.md
 - Agent: security-reviewer
 - Gate: artifact
@@ -35,6 +38,7 @@ platforms:
 
 ## Phase: review
 - Prompt: "Review the implementation for quality, correctness, test coverage, and adherence to coding standards. A security review has already been completed — focus on code quality only: {task}"
+- Role: code-reviewer
 - Artifact: .minion/{task_slug}/review.md
 - Agent: code-quality
 - Gate: artifact

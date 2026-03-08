@@ -1,25 +1,21 @@
 # Changelog
 
-## [2.2.0] - 2026-03-08
+## [2.3.0] - 2026-03-08
 
 ### Added
-- Optional MCP delegation — orchestrator uses MCP tools for parsing, DAG, scope check, and cost when available
-- CLI installer (`npx minion-toolkit install`) — copies files, installs plugins/tools, offers recommended plugins
-- Agent auto-generator (`npx minion-toolkit agents`) — scans project structure and generates tailored agent files
-- Doctor command (`npx minion-toolkit doctor`) — verifies installation health
-- Uninstall and update commands for clean lifecycle management
-- npm publish in release workflow for CLI distribution
+- **Stall detection** — detects when review-fix cycles make no progress (git SHA comparison) and exits early instead of looping endlessly
+- **Smart workflow auto-selection** — heuristic-based workflow choice replaces hardcoded `tdd` default (security keywords → `secure`, simple single task → `quick`, complex/TDD → `tdd`, fallback → `default`)
+- **Intent capture** — Step 0 asks "What's the goal?" and "What does success look like?" on first run, saves to `.minion/intent.md` for review phases to reference
+- **Pre-built domain agents** — 5 domain-specific agents with scored auto-detection via `matches` field: backend-architect, frontend-architect, devops-engineer, data-engineer, tech-writer
+- **Role overlays** — phase-specific behavioral overlays that shape HOW workers approach tasks: researcher (plan), tdd-developer (implement), code-reviewer (review), security-auditor (security-review), performance-reviewer
+- **Layered prompt composition** — worker prompts now compose `base worker + domain persona (WHAT) + role overlay (HOW) + task context` for richer specialization
+- **Role field in workflow templates** — `tdd`, `full-pipeline`, and `secure` workflows now specify `- Role:` per phase for automatic overlay loading
+- **Scored agent matching** — replaces hardcoded auto-detection rules with point-based scoring (extension=3pts, path=2pts, keyword=1pt) reading from agent YAML frontmatter
+- **Intent alignment in post-run report** — report includes goal, success criteria, and alignment assessment
 
 ### Changed
-- README restructured with Installation section as primary entry point
-
-## [1.11.0] - 2026-03-08
-
-### Added
-- Phase F — conflict prevention, smart context, cost tracking (#34) (`fb40b3f`)
-
-### Other
-- v1.10.0 — update changelog and version (#33) (`c755552`)
+- Default workflow is now heuristic-based (`null` → auto-select) instead of hardcoded `tdd`
+- Agent auto-detection uses `matches` field from YAML frontmatter instead of hardcoded extension rules
 
 ## [2.1.0] - 2026-03-08
 

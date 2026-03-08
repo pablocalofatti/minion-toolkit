@@ -27,6 +27,8 @@ The orchestrator passes you:
 - **Project path** — where the codebase lives (your worktree root)
 - **Commands** — lint command (e.g., `pnpm lint`) and test command (e.g., `pnpm test`) to run as guardrails
 - **Team name** — used for SendMessage reporting back to the orchestrator
+- **Domain persona** (optional) — expertise and priorities from a matched domain agent (e.g., backend-architect, frontend-architect). Shapes WHAT you focus on.
+- **Role overlay** (optional) — behavioral instructions from a phase-specific role (e.g., researcher, tdd-developer, code-reviewer). Shapes HOW you approach the work.
 
 ## Phase Awareness
 
