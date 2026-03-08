@@ -2,7 +2,7 @@ import { rmSync, existsSync } from "node:fs";
 import { join } from "node:path";
 import { createInterface } from "node:readline/promises";
 import { stdin, stdout } from "node:process";
-import { CLAUDE_DIR, log, logSuccess } from "./utils.js";
+import { CLAUDE_DIR, SEPARATOR_WIDTH, log, logSuccess } from "./utils.js";
 
 const FILES_TO_REMOVE = [
   join(CLAUDE_DIR, "commands", "minion.md"),
@@ -13,7 +13,7 @@ const FILES_TO_REMOVE = [
 
 export async function uninstall(): Promise<void> {
   log("Minion Toolkit Uninstaller");
-  log("=".repeat(40));
+  log("=".repeat(SEPARATOR_WIDTH));
   log("\nThis will remove:");
   for (const file of FILES_TO_REMOVE) {
     log(`  - ${file.replace(CLAUDE_DIR, "~/.claude")}`);

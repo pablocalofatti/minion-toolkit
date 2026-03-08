@@ -2,6 +2,7 @@ import { existsSync } from "node:fs";
 import { join } from "node:path";
 import {
   CLAUDE_DIR,
+  SEPARATOR_WIDTH,
   runCommand,
   log,
   logSuccess,
@@ -28,7 +29,7 @@ const REQUIRED_PLUGINS = ["superpowers", "code-review"];
 
 export async function doctor(): Promise<void> {
   log("Minion Toolkit Health Check");
-  log("=".repeat(40));
+  log("=".repeat(SEPARATOR_WIDTH));
 
   let issues = 0;
 

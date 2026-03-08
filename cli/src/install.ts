@@ -6,6 +6,7 @@ import { stdin, stdout } from "node:process";
 import {
   CLAUDE_DIR,
   ASSET_DIRS,
+  SEPARATOR_WIDTH,
   ensureDir,
   runCommand,
   log,
@@ -168,7 +169,7 @@ async function installPlugins(): Promise<void> {
 
 export async function install(): Promise<void> {
   log("Minion Toolkit Installer");
-  log("=".repeat(40));
+  log("=".repeat(SEPARATOR_WIDTH));
 
   await copyAssets();
   await installPlugins();

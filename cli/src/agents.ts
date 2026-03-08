@@ -110,8 +110,8 @@ function detectStacks(projectDir: string): DetectedStack[] {
         ...Object.keys(pkg.dependencies ?? {}),
         ...Object.keys(pkg.devDependencies ?? {}),
       ];
-    } catch {
-      // ignore parse errors
+    } catch (err) {
+      logWarn(`Failed to parse ${pkgPath}: ${err instanceof Error ? err.message : String(err)}`);
     }
   }
 
