@@ -16,12 +16,46 @@ The user's input is in `$ARGUMENTS`.
 - **Parse platform flag:** Check if `$ARGUMENTS` contains `--platform {name}`. If present, extract `{name}` as the platform override and remove it from arguments. Store the platform name.
 - **Parse resume flag:** Check if `$ARGUMENTS` contains `--resume`. If present, set `resume_mode = true` and remove `--resume` from arguments. Default: `resume_mode = false`.
 - **Parse dry-run flag:** Check if `$ARGUMENTS` contains `--dry-run`. If present, set `dry_run = true` and remove `--dry-run` from arguments. Default: `dry_run = false`.
-- If no `--workflow` flag, set workflow name to `tdd`.
+
+## Step 0: Capture Intent
+
+**Skip this step if:**
+- `resume_mode` is `true` (intent was captured in the original run)
+- `dry_run` is `true` (preview only, no need for intent)
+- `.minion/intent.md` already exists in the project root
+
+**If none of the skip conditions apply:**
+
+1. Ask the user: **"What's the goal of this run?"**
+   - Wait for their response. Store as `goal`.
+
+2. Ask the user: **"What does success look like? (How will you know it's done?)"**
+   - Wait for their response. Store as `success_criteria`.
+
+3. Create the `.minion/` directory if it doesn't exist, then write `.minion/intent.md`:
+
+```
+# Run Intent
+
+## Goal
+{goal}
+
+## Success Criteria
+{success_criteria}
+
+## Tasks File
+{tasks_file_path}
+
+## Timestamp
+{ISO timestamp}
+```
+
+The intent file is referenced in Step 6 (review phase prompts) and Step 8 (post-run report).
+
+- If no `--workflow` flag, set `workflow_name` to `null` (auto-select in Step 1.2).
 - If `$ARGUMENTS` (after flag removal) contains a file path (e.g., `tasks.md`, `speckit/tasks.md`), read that file.
 - If `$ARGUMENTS` is empty after flag removal, look for `speckit/tasks.md` in the current project working directory.
 - If the file is not found, tell the user and show the expected format (see below).
-
-- **MCP delegation (optional):** If the `minion_start` MCP tool is available, you may call the MCP server's `parse_tasks` function to get structured JSON output instead of parsing markdown manually. This provides more reliable task extraction with validated fields. If the MCP tool is not available or fails, fall back to the prose parsing below.
 
 Parse the file for tasks. Each task is a markdown section with a heading like:
 
@@ -68,6 +102,34 @@ The `Agent` field is optional. If omitted, the orchestrator auto-detects the bes
 
 If zero actionable tasks remain after filtering, inform the user and stop.
 
+## Step 1.2: Auto-Select Workflow
+
+**Skip this step if** `workflow_name` is already set (user provided `--workflow` flag).
+
+Scan all parsed tasks and compute:
+- `task_count` — number of actionable tasks (excluding DONE/SKIP)
+- `total_files` — sum of all files across all tasks' `Files:` fields
+- `has_dependencies` — true if any task has a `Depends:` field
+- `has_security_keywords` — true if any task description contains (case-insensitive): "security", "auth", "OWASP", "vulnerability", "encryption", "permission", "credential", "injection"
+- `has_test_keywords` — true if any task description contains (case-insensitive): "test", "TDD", "spec", "coverage", "unit test"
+
+**Selection rules (first match wins):**
+
+1. `has_security_keywords` → set `workflow_name = "secure"`
+2. `task_count == 1` AND `total_files <= 3` AND NOT `has_dependencies` → set `workflow_name = "quick"`
+3. `has_test_keywords` OR `has_dependencies` OR `task_count >= 3` → set `workflow_name = "tdd"`
+4. Default → set `workflow_name = "default"`
+
+Store the selection reason for display in Step 3:
+- `workflow_auto_reason` — e.g., "security keywords detected", "single simple task", "3+ tasks with dependencies", "default fallback"
+
+In Step 3 (confirmation), display the auto-selected workflow with the reason:
+```
+Workflow: tdd (auto-selected — 4 tasks with dependencies detected)
+```
+
+The user can override via the "Adjust" option.
+
 ## Step 1.3: Resolve Workflow
 
 Locate and parse the workflow template for this run.
@@ -104,6 +166,7 @@ Read the workflow file and extract:
 - **Agent** — value after `- Agent:` (agent name, defaults to `default_agent` if not specified)
 - **Gate** — value after `- Gate:` (`artifact` or `exit`, defaults to `artifact`)
 - **Command** — nested block under `- Command:` with `canonical:` and optional platform overrides (e.g., `claude-code:`, `opencode:`, `codex:`)
+- **Role** — value after `- Role:` (role overlay name, e.g., `researcher`, `tdd-developer`, `code-reviewer`). Optional — if not set, no role overlay is applied for this phase.
 - **Cycle** — value after `- Cycle:` (phase name to jump back to after this phase completes successfully, or `null` if not set)
 - **Max-cycles** — value after `- Max-cycles:` (integer, defaults to `3` if `Cycle` is set, ignored if `Cycle` is not set)
 - **Pre-hook** — value after `- Pre-hook:` (shell command to run before this phase starts, or `null` if not set). Template variables `{task}`, `{task_slug}`, `{task_number}`, `{phase}` are resolved before execution.
@@ -203,8 +266,6 @@ If `resume_mode` is `true`:
 
 If any tasks have `dependsOn` values, compute execution waves:
 
-- **MCP delegation (optional):** If MCP tools are available, call `resolve_dag` with the parsed task list to get waves, critical path, and cycle detection as structured JSON. Fall back to prose topological sort if unavailable.
-
 1. Build a DAG from task dependencies
 2. Run topological sort (Kahn's algorithm) to group tasks into waves
 3. Tasks in the same wave can run in parallel; waves execute sequentially
@@ -218,8 +279,6 @@ Store the computed waves, critical path, and wave count for the confirmation ste
 ## Step 1.6: Conflict Analysis
 
 Detect file-level overlap between tasks in the same wave to prevent merge conflicts.
-
-- **MCP delegation (optional):** If MCP tools are available, call `check_scope` with the task list and wave assignments to detect file overlaps. Fall back to prose matrix comparison if unavailable.
 
 1. **Build file-overlap matrix:** For each wave, compare the `Files:` field of every task pair in that wave. Two tasks overlap if they share any file path (exact match after trimming whitespace).
 
@@ -248,30 +307,36 @@ If both locations contain an agent with the same `name`, the **project-level** a
 
 For each `.md` file found, read the YAML frontmatter and extract:
 - `name` — the agent identifier (used in `subagent_type`)
-- `description` — used for auto-detection keyword matching
+- `description` — used for display and fallback matching
 - `model` — the model the agent uses (informational, shown in confirmation)
+- `matches` — optional object with auto-detection criteria:
+  - `extensions` — list of file extensions (e.g., `[".tsx", ".jsx"]`)
+  - `paths` — list of directory prefixes (e.g., `["components/", "pages/"]`)
+  - `keywords` — list of description keywords (e.g., `["component", "UI"]`)
 
 **Exclude** any agent named `minion-worker` from the selectable pool — it is always available as the default fallback and should not be assigned via auto-detection.
 
-### Auto-Detection Rules
+### Auto-Detection Rules (Scored Matching)
 
-For tasks that have NO explicit `Agent:` field, attempt to match using these rules (evaluated in order, first match wins):
+For tasks that have NO explicit `Agent:` field, score each available agent against the task:
 
-1. **File extension matching:**
-   - `.tsx`, `.jsx`, `.css`, `.scss` files → look for an agent whose `description` contains "frontend" or "React" or "Next.js" (case-insensitive)
-   - `.service.ts`, `.controller.ts`, `.module.ts`, `.entity.ts`, `.dto.ts` files → look for an agent whose `description` contains "backend" or "NestJS" or "API" (case-insensitive)
+**Scoring algorithm:**
 
-2. **Path pattern matching:**
-   - Files under `components/`, `pages/`, `app/`, `hooks/`, `styles/` → frontend agent
-   - Files under `services/`, `controllers/`, `modules/`, `entities/`, `migrations/` → backend agent
+For each agent with a `matches` field, compute a score:
 
-3. **Description keyword matching:**
-   - Scan the task description for keywords: "component", "UI", "form", "widget", "page" → frontend agent
-   - Scan for: "endpoint", "API", "database", "migration", "service", "controller" → backend agent
+1. **Extension match (3 points each):** For each file in the task's `Files:` field, check if its extension appears in the agent's `matches.extensions`. Score 3 per matching file.
 
-4. **No match** → assign `minion-worker` (generic fallback)
+2. **Path match (2 points each):** For each file in the task's `Files:` field, check if its path starts with any prefix in the agent's `matches.paths`. Score 2 per matching file.
 
-If multiple agents match the same category (e.g., two agents with "frontend" in description), prefer the **project-level** agent. If still ambiguous, use the first one found alphabetically and note the ambiguity in the confirmation step.
+3. **Keyword match (1 point each):** Scan the task description (case-insensitive) for each keyword in the agent's `matches.keywords`. Score 1 per keyword found.
+
+**Selection:**
+- Agent with the highest score wins (minimum score of 1 to qualify)
+- Ties → prefer project-level agent over global agent
+- Still tied → first alphabetically, note ambiguity in confirmation
+- Score 0 for all agents → assign `minion-worker` (fallback)
+
+**Agents without a `matches` field** (e.g., legacy agents) are excluded from scored matching. They can still be assigned via explicit `Agent:` field in the task.
 
 ### No Agents Installed
 
@@ -285,6 +350,15 @@ For each task, store the resolved `agent_type`:
 - If no match → use `minion-worker`
 
 Also store the full agent registry (name → description → model) for display in Step 3.
+
+### Load Role Overlays
+
+For each workflow phase that has a `Role` field:
+1. Look for `{project_root}/.claude/roles/{role_name}.md` (project-level priority)
+2. Fall back to `~/.claude/roles/{role_name}.md`
+3. If found, read the file content (skip YAML frontmatter, extract body text only)
+4. Store as `role_overlay_content` for that phase
+5. If not found, log a warning: "Role overlay '{role_name}' not found — skipping overlay for phase '{phase_name}'"
 
 ## Step 2: Detect Project Commands
 
@@ -452,7 +526,6 @@ Display:
 - **Test command:** the detected command, or "none detected"
 - **Max parallel workers:** `min(task_count, 3)` — this is the default
 - **Estimated cost:** Compute a rough cost estimate using this heuristic:
-  - **MCP delegation (optional):** If MCP `estimate_cost` tool is available, call it with task count, phase count, and model name for a more accurate per-model estimate. Fall back to heuristic below if unavailable.
   - Per task: `phases × avg_iterations_per_phase × avg_tokens_per_iteration × model_rate`
   - Defaults: `avg_iterations_per_phase = 8`, `avg_tokens_per_iteration = 4000`, `model_rate = $3/$15 per 1M input/output tokens` (Sonnet pricing)
   - Total: sum across all tasks
@@ -537,9 +610,17 @@ LINT COMMAND: {resolved lint command, or "none"}
 TEST COMMAND: {resolved test command, or "none"}
 TEAM NAME: {team name from Step 4}
 AGENT TYPE: {resolved agent_type from Step 1.7, e.g. "my-backend-agent" or "minion-worker"}
+DOMAIN PERSONA: {If the task's resolved agent has a persona section (body text after YAML frontmatter in its .md file), include it here. Omit this field entirely if the agent is minion-worker or has no persona section.}
+ROLE OVERLAY: {If the current phase has a role_overlay_content (loaded from roles/{role_name}.md in Step 1.7), include it here. Omit this field entirely if the phase has no Role field or the overlay file was not found.}
 WORKFLOW: {workflow name, e.g. "tdd" — omit if "default"}
 PHASE: {current phase name, e.g. "plan", "implement", "review" — omit if using default workflow}
 PHASE PROMPT: {resolved prompt from workflow template, with {task} replaced by actual task title + description — omit if using default workflow}
+```
+
+If the current phase name contains "review" (e.g., "review", "security-review") AND `.minion/intent.md` exists in the project root:
+  - Append to the `PHASE PROMPT` value: "\n\nAlso reference .minion/intent.md for the overall run goal and success criteria when evaluating this implementation."
+
+```
 ARTIFACT PATH: {resolved artifact path, e.g. ".minion/task-1-add-validation/implement.md" — omit if using default workflow}
 PREVIOUS ARTIFACTS: {comma-separated list of artifact paths from completed phases, or "none" — omit if using default workflow or first phase}
 CYCLE: {cycle_target} → {current_phase} (iteration {cycle_count + 1} of {max_cycles}) — omit if phase has no Cycle or is not a cycle target
@@ -717,11 +798,24 @@ For each worker report:
    - If no phase comes after the cycling phase → task is fully complete. Use `TaskUpdate` to mark the task as `completed`.
 
    **Case B — Cycle target phase completed with non-`success` status (e.g., `review_failed`):**
+   - Before spawning the fix worker, capture the current HEAD SHA on the task's branch: `pre_fix_sha = git rev-parse {branch_name}`. Store `pre_fix_sha` in the task's tracking metadata.
    - Continue normally to the next phase (the cycling phase, e.g., fix).
    - Spawn the fix worker as usual — treat `review_failed` as a valid "proceed to fix" signal, NOT as a task failure.
    - Use the standard spawn logic (Agent tool with worktree isolation, background execution, full prompt from Step 6).
 
-   **Case C — Cycling phase completed (e.g., fix completes with `success`):**
+   **Case C — Cycling phase completed (e.g., fix completes):**
+
+   **Stall detection** (check before cycling back):
+   - Capture the current HEAD SHA on the task's branch: `post_fix_sha = git rev-parse {branch_name}`
+   - Compare with `pre_fix_sha` (stored when Case B spawned this fix worker)
+   - **If `pre_fix_sha == post_fix_sha` AND status is NOT `success`:**
+     - STALL DETECTED. The fix phase produced no changes.
+     - Log: `[{HH:MM:SS}] Task {N} ({title}): Stall detected — fix phase produced no file changes. Exiting cycle early.`
+     - Do NOT cycle back to review. Mark the task with its current status (e.g., `review_failed`).
+     - Advance to whatever phase comes after the cycling phase in document order, or complete the task.
+     - Skip the remaining cycle logic below.
+
+   **Normal cycle logic** (only reached if no stall detected):
    - Read the task's `cycle_count` from `status.json` (default `0`).
    - **If `cycle_count < max_cycles`:**
      - Increment `cycle_count` in `status.json`.
@@ -843,6 +937,17 @@ After writing learnings, generate a comprehensive run report at `.minion/report.
 - **Workflow:** {workflow_name} ({phase list with arrows})
 - **Duration:** {total elapsed time from first worker spawn to last report}
 - **Tasks:** {total} total, {succeeded} succeeded, {failed} failed, {skipped} skipped
+
+## Intent Alignment
+
+_Included only when `.minion/intent.md` exists._
+
+- **Goal:** {goal from intent.md}
+- **Success Criteria:** {success_criteria from intent.md}
+- **Assessment:** {Based on task outcomes:
+  - All tasks succeeded → "All tasks completed successfully. Intent appears fulfilled."
+  - Some failed → "Partial completion. {N} of {total} tasks succeeded. Review failed tasks against success criteria."
+  - All failed → "Run failed. No tasks completed. Success criteria not met."}
 
 ## Task Results
 
